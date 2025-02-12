@@ -1,0 +1,17 @@
+# Пример основных правил для .NET
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+
+# .NET artifacts
+*.dll
+*.pdb
+*.exe
+
+# Others
+appsettings.*.local.json
