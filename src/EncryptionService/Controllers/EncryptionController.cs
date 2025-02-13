@@ -1,0 +1,50 @@
+﻿using EncryptionService.DTOs;
+using EncryptionService.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace EncryptionService.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class EncryptionController : ControllerBase
+    {
+        private readonly IEncryptionService _encryptionService;
+        public EncryptionController(IEncryptionService encryptionService)
+        {
+            _encryptionService = encryptionService;
+        }
+
+        /* POST: api/encryption/encrypt
+        Приймає об'єкт EncryptionRequest і повертає зашифрований текст */
+        [HttpPost("encrypt")]
+        public IActionResult Encrypt([FromBody] EncryptionRequest request)
+        {
+            try
+            {
+                var cipherText = _encryptionService.Encrypt(request.PlainText, request.Key);
+                return Ok(new { CipherText = cipherText });
+            }
+            catch (Exception ex)
+            {
+                // В случае ошибки возвращаем подробное сообщение (в продакшене лучше скрывать детали)
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /* POST: api/encryption/decrypt
+        Приймає об'єкт DecryptionRequest і повертає вихідний (розшифрований) текст */
+        [HttpPost("decrypt")]
+        public IActionResult Decrypt([FromBody] DecryptionRequest request)
+        {
+            try
+            {
+                var plainText = _encryptionService.Decrypt(request.CipherText, request.Key);
+                return Ok(new { PlainText = plainText });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+    }
+}
