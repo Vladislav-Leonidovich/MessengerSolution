@@ -91,7 +91,11 @@ namespace IdentityService.Services
         // Створення JWT токена для аутентифікованого користувача
         private AuthResponse CreateToken(User user)
         {
-            var jwtSecretKey = "9J*4&fR+T2s!@lK8nQvL1$pOiWzBx3#6^jCe7YmH_dVtX5?AcN0b%MuSw~ErG235";
+            var jwtSecretKey = _configuration["JWT_SECRET_KEY"];
+            if (string.IsNullOrEmpty(jwtSecretKey))
+            {
+                throw new InvalidOperationException("JWT Secret Key is not configured");
+            }
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 

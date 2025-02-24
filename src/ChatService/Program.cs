@@ -25,13 +25,13 @@ JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        var jwtSecretKey = "9J*4&fR+T2s!@lK8nQvL1$pOiWzBx3#6^jCe7YmH_dVtX5?AcN0b%MuSw~ErG235";
+        var jwtSecretKey = builder.Configuration["JWT_SECRET_KEY"];
+        if (string.IsNullOrEmpty(jwtSecretKey))
+        {
+            throw new InvalidOperationException("JWT Secret Key is not configured");
+        }
         var key = Encoding.UTF8.GetBytes(jwtSecretKey);
 
-        if (jwtSecretKey == null && key == null)
-        {
-            throw new InvalidOperationException("JWT Secret Key is not set");
-        }
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
