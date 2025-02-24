@@ -42,6 +42,7 @@ namespace IdentityService.Services
                 Email = model.Email,
                 PasswordHash = passwordHash,
                 PasswordSalt = passwordSalt,
+                DisplayName = model.UserName,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -90,7 +91,7 @@ namespace IdentityService.Services
         // Створення JWT токена для аутентифікованого користувача
         private AuthResponse CreateToken(User user)
         {
-            var jwtSecretKey = _configuration["Jwt:SecretKey"] ?? "SuperSecretKey12345";
+            var jwtSecretKey = "9J*4&fR+T2s!@lK8nQvL1$pOiWzBx3#6^jCe7YmH_dVtX5?AcN0b%MuSw~ErG235";
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 

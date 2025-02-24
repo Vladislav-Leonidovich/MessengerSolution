@@ -1,0 +1,21 @@
+﻿<div class="bottom-nav-container">
+	<nav class="bottom-nav">
+		<button><img class="bottom-nav-icon" src="Images/profileicon.svg" alt="Icon" /></button>
+		<img src="Images/line.svg" alt="Icon" />
+		<button><img class="bottom-nav-icon" src="Images/usericon.svg" alt="Icon" /></button>
+		<img src="Images/line.svg" alt="Icon" />
+		<button><img class="bottom-nav-icon" src="Images/chaticon.svg" alt="Icon" /></button>
+		<img src="Images/line.svg" alt="Icon" />
+		<button><img class="bottom-nav-icon" src="Images/foldersicon.svg" alt="Icon" /></button>
+		<img src="Images/line.svg" alt="Icon" />
+		<button><img class="bottom-nav-icon" src="Images/settingsicon.svg" alt="Icon" /></button>
+	</nav>
+</div>
+
+@code {
+	[Inject] NavigationManager Nav { get; set; }
+
+	void GoToChat() => Nav.NavigateTo("/chat");
+	void GoToFolders() => Nav.NavigateTo("/folders");
+	void GoToSettings() => Nav.NavigateTo("/settings");
+}

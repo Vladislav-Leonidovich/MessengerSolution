@@ -1,0 +1,44 @@
+﻿@page "/register"
+@using MauiClient.Models.Auth
+@using MauiClient.Services
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+
+<h3>Реєстрація користувача</h3>
+
+<div>
+    <input @bind="registerModel.UserName" placeholder="Логін" />
+</div>
+<div>
+    <input @bind="registerModel.Email" placeholder="Email" />
+</div>
+<div>
+    <input type="password" @bind="registerModel.Password" placeholder="Пароль" />
+</div>
+<div>
+    <button @onclick="OnRegister">Зареєструватися</button>
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <p>@message</p>
+}
+
+@code {
+    private RegisterDto registerModel = new RegisterDto();
+    private string message = string.Empty;
+
+    private async Task OnRegister()
+    {
+        var success = await AuthService.RegisterAsync(registerModel);
+        if (success)
+        {
+            message = "Реєстрацію пройдено успішно. Тепер увійдіть у систему.";
+            NavigationManager.NavigateTo("/login");
+        }
+        else
+        {
+            message = "Помилка при реєстрації. Спробуйте ще раз.";
+        }
+    }
+}

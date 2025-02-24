@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorClient", "src\BlazorC
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedLibraries", "src\SharedLibraries\SharedLibraries.csproj", "{12BA00EC-68E1-4C10-9C6D-BD554187ADF7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MauiClient", "MauiClient\MauiClient.csproj", "{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,12 @@ Global
 		{12BA00EC-68E1-4C10-9C6D-BD554187ADF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{12BA00EC-68E1-4C10-9C6D-BD554187ADF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{12BA00EC-68E1-4C10-9C6D-BD554187ADF7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0}.Release|Any CPU.Deploy.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -65,5 +73,6 @@ Global
 		{20BAF886-CB9A-4FF5-B8A2-9411E080F612} = {0058396E-C876-43D1-8220-6F614DC5FA8E}
 		{9003C112-FB22-455B-8E56-F039ED82F89D} = {0058396E-C876-43D1-8220-6F614DC5FA8E}
 		{12BA00EC-68E1-4C10-9C6D-BD554187ADF7} = {0058396E-C876-43D1-8220-6F614DC5FA8E}
+		{2C01B303-9ADA-4B1D-97FB-BDEE3CEB57F0} = {0058396E-C876-43D1-8220-6F614DC5FA8E}
 	EndGlobalSection
 EndGlobal

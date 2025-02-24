@@ -1,0 +1,43 @@
+﻿@page "/chats"
+@using BlazorClient.Services
+@inject IChatService ChatService
+@inject NavigationManager NavigationManager
+
+<h3>Список чатів</h3>
+
+@if (chatRooms == null)
+{
+    <p>Завантаження чатів...</p>
+}
+else if (!chatRooms.Any())
+{
+    <p>Чати не знайдено.</p>
+}
+else
+{
+    <ul>
+        @foreach (var chat in chatRooms)
+        {
+            <li>
+                <a @onclick="() => OpenChat(chat.Id)">@chat.Name</a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    // Для прикладу, userId задаємо статично; в реальному застосунку його потрібно отримувати після автентифікації
+    private int userId = 1;
+    private IEnumerable<ChatRoomResponse> chatRooms = new List<ChatRoomResponse>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        chatRooms = await ChatService.GetChatRoomsAsync(userId);
+    }
+
+    // Метод для відкриття конкретного чату (наприклад, переходу до сторінки ChatRoom)
+    private void OpenChat(int chatId)
+    {
+        NavigationManager.NavigateTo($"/chat/{chatId}");
+    }
+}

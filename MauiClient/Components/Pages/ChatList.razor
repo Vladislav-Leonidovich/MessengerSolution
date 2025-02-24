@@ -1,0 +1,40 @@
+﻿@page "/chats"
+@using MauiClient.Models.Chat
+@using MauiClient.Services
+@inject IChatService ChatService
+@inject NavigationManager NavigationManager
+
+@if (chatRooms == null)
+{
+	<p>Завантаження чатів...</p>
+}
+else if (!chatRooms.Any())
+{
+	<p>Чати не знайдено.</p>
+}
+else
+{
+	<ul class="chat-list">
+		@foreach (var chat in chatRooms)
+		{
+			<li>
+			</li>
+		}
+	</ul>
+}
+
+@code {
+	// Для прикладу, userId задаємо статично; у реальному додатку отримуйте його після автентифікації
+	private int userId = 1;
+	private IEnumerable<ChatRoomDto> chatRooms = new List<ChatRoomDto>();
+
+	protected override async Task OnInitializedAsync()
+	{
+		chatRooms = await ChatService.GetChatRoomsAsync(userId);
+	}
+
+	private void OpenChat(int chatId)
+	{
+		NavigationManager.NavigateTo($"/chat/{chatId}");
+	}
+}

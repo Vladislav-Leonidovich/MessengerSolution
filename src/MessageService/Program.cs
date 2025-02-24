@@ -6,7 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("MessageDatabase")
-    ?? "Server=localhost;Database=MessageDb;User=root;Password=root;";
+    ?? "Server=localhost;Database=messagedb;User=root;Password=root;";
 
 builder.Services.AddDbContext<MessageDbContext>(options =>
     options.UseMySQL(connectionString));

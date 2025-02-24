@@ -1,0 +1,28 @@
+﻿@using MauiClient.Services
+@using MauiClient.Models.Folder
+@inject IFolderService FolderService
+
+<ul>
+    @if (folders is not null)
+    {
+        @foreach (var folder in folders)
+        {
+            <li @onclick="() => OnFolderSelected(folder.Id)">
+                @folder.Name
+            </li>
+        }
+    }
+</ul>
+
+@code {
+    private int userId = 1;
+    private IEnumerable<FolderDto>? folders = new List<FolderDto>();
+    protected override async Task OnInitializedAsync()
+    {
+        folders = await FolderService.GetFoldersAsync(userId);
+    }
+
+    private void OnFolderSelected(int folderId)
+    {
+    }
+}
