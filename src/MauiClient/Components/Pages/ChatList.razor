@@ -1,6 +1,6 @@
 ﻿@page "/chats"
-@using MauiClient.Models.Chat
 @using MauiClient.Services
+@using ChatServiceDTOs.Chats
 @inject IChatService ChatService
 @inject NavigationManager NavigationManager
 
@@ -30,7 +30,7 @@ else
 
 	protected override async Task OnInitializedAsync()
 	{
-		chatRooms = await ChatService.GetChatRoomsAsync(userId);
+		chatRooms = await ChatService.GetPrivateChatRoomsAsync(userId);
 	}
 
 	private void OpenChat(int chatId)

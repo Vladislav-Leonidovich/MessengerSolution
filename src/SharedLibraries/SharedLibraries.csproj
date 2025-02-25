@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>12ba00ec-68e1-4c10-9c6d-bd554187adf7</ProjectGuid>
+    <ProjectGuid>{12BA00EC-68E1-4C10-9C6D-BD554187ADF7}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SharedLibraries</RootNamespace>
@@ -31,24 +31,26 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System"/>
-    
-    <Reference Include="System.Core"/>
-    <Reference Include="System.Xml.Linq"/>
-    <Reference Include="System.Data.DataSetExtensions"/>
-    
-    
-    <Reference Include="Microsoft.CSharp"/>
-    
-    <Reference Include="System.Data"/>
-    
-    <Reference Include="System.Net.Http"/>
-    
-    <Reference Include="System.Xml"/>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ChatServiceDTOs\Chats\ChatRoomDto.cs" />
+    <Compile Include="ChatServiceDTOs\Folders\CreateFolderDto.cs" />
+    <Compile Include="ChatServiceDTOs\Chats\CreateGroupChatRoomDto.cs" />
+    <Compile Include="ChatServiceDTOs\Chats\CreatePrivateChatRoomDto.cs" />
+    <Compile Include="ChatServiceDTOs\Folders\FolderDto.cs" />
+    <Compile Include="ChatServiceDTOs\Chats\GroupChatMemberDto.cs" />
+    <Compile Include="ChatServiceDTOs\Chats\GroupChatRoomDto.cs" />
     <Compile Include="Class1.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
- </Project>
+</Project>
