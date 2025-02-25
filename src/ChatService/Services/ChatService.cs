@@ -1,6 +1,8 @@
-﻿using System.Security.Claims;
+﻿using System.Linq;
+using System.Security.Claims;
 using ChatService.Data;
-using ChatService.DTOs;
+using ChatServiceDTOs.Chats;
+using ChatServiceModels.Chats;
 using ChatService.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -18,89 +20,239 @@ namespace ChatService.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        // Метод для створення нового чату
-        public async Task<ChatRoomDto> CreateChatRoomAsync(CreateChatRoomDto model)
+        // Метод для створення групового чату
+        public async Task<GroupChatRoomDto> CreateGroupChatRoomAsync(CreateGroupChatRoomDto model)
         {
-            // Створення нового об'єкту чату з назвою та поточною датою
-            var chatRoom = new ChatRoom
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            // Створюємо новий груповий чат із встановленою назвою і власником
+            var groupChat = new GroupChatRoom
             {
                 Name = model.Name,
+                OwnerId = currentUserId,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Додавання кожного користувача до чату
-            foreach (var userId in model.UserIds)
+            // Додаємо власника до групи з роллю Owner
+            groupChat.GroupChatMembers.Add(new GroupChatMember
             {
-                chatRoom.UserChatRooms.Add(new UserChatRoom
+                UserId = currentUserId,
+                Role = GroupRole.Owner
+            });
+
+            // Додаємо інших учасників (як Member за замовчуванням)
+            foreach (var memberId in model.MemberIds)
+            {
+                if (memberId == currentUserId) continue; // не дублювати власника
+                groupChat.GroupChatMembers.Add(new GroupChatMember
                 {
-                    UserId = userId,
-                    ChatRoom = chatRoom
+                    UserId = memberId,
+                    Role = GroupRole.Member
                 });
             }
 
-            // Додавання об'єкту чату до бази даних
-            _context.ChatRooms.Add(chatRoom);
+            _context.GroupChatRooms.Add(groupChat);
             await _context.SaveChangesAsync();
 
-            return new ChatRoomDto
+            // Формуємо DTO для відповіді
+            var dto = new GroupChatRoomDto
             {
-                Id = chatRoom.Id,
-                Name = chatRoom.Name,
-                CreatedAt = chatRoom.CreatedAt
+                Id = groupChat.Id,
+                Name = groupChat.Name,
+                CreatedAt = groupChat.CreatedAt,
+                OwnerId = groupChat.OwnerId,
+                Members = groupChat.GroupChatMembers.Select(gm => new GroupChatMemberDto
+                {
+                    UserId = gm.UserId,
+                    Role = gm.Role
+                }).ToList()
             };
+
+            return dto;
         }
 
-        // Метод для отримання чатів, у яких бере участь користувач
-        public async Task<IEnumerable<ChatRoomDto>> GetChatRoomsForUserAsync()
+        // Метод для створення нового приватного чату
+        public async Task<ChatRoomDto> CreatePrivateChatRoomAsync(CreatePrivateChatRoomDto model)
         {
+            // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
             {
-                return Enumerable.Empty<ChatRoomDto>();
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
-            // Виконуємо запит до БД, включаючи зв'язки з UserChatRooms
-            return await _context.ChatRooms
-                .Include(cr => cr.UserChatRooms)
-                .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == userId))
-                .Select(cr => new ChatRoomDto
-                {
-                    Id = cr.Id,
-                    Name = cr.Name,
-                    CreatedAt = cr.CreatedAt
-                })
-                .ToListAsync();
+            // Створення нового об'єкту чату з назвою та поточною датою
+            var privateChatRoom = new PrivateChatRoom
+            {
+                CreatedAt = DateTime.UtcNow
+            };
+
+            privateChatRoom.UserChatRooms.Add(new UserChatRoom
+            {
+                UserId = model.UserId,
+                PrivateChatRoom = privateChatRoom
+            });
+
+            privateChatRoom.UserChatRooms.Add(new UserChatRoom
+            {
+                UserId = currentUserId,
+                PrivateChatRoom = privateChatRoom
+            });
+
+            // Додавання об'єкту чату до бази даних
+            _context.PrivateChatRooms.Add(privateChatRoom);
+            await _context.SaveChangesAsync();
+
+            var dto = new ChatRoomDto
+            {
+                Id = privateChatRoom.Id,
+                CreatedAt = privateChatRoom.CreatedAt
+            };
+
+            return dto;
         }
 
-        public async Task<IEnumerable<ChatRoomDto>> GetChatsForFolder(int folderId)
+        // Метод для отримання всіх приватних чатів, у яких бере участь користувач
+        public async Task<IEnumerable<ChatRoomDto>> GetPrivateChatRoomsForUserAsync()
         {
-            return await _context.ChatRooms
-            .Where(cr => cr.FolderId == folderId)
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            // Отримуємо приватні чати, де поточний користувач бере участь
+            var privateChats = await _context.PrivateChatRooms
+                .Include(pcr => pcr.UserChatRooms)
+                .Where(pcr => pcr.UserChatRooms.Any(puc => puc.UserId == currentUserId))
+                .Select(pcr => new ChatRoomDto
+                {
+                    Id = pcr.Id,
+                    CreatedAt = pcr.CreatedAt
+                })
+                .ToListAsync();
+
+            return privateChats;
+        }
+
+        // Метод для отримання всіх приватних чатів, у яких бере участь користувач
+        public async Task<IEnumerable<GroupChatRoomDto>> GetGroupChatRoomsForUserAsync()
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            // Отримуємо групові чати, де поточний користувач є учасником
+            var groupChats = await _context.GroupChatRooms
+                .Include(gc => gc.GroupChatMembers)
+                .Where(gc => gc.GroupChatMembers.Any(gm => gm.UserId == currentUserId))
+                .Select(gc => new GroupChatRoomDto
+                {
+                    Id = gc.Id,
+                    Name = gc.Name, // Назва групового чату, встановлена власником
+                    CreatedAt = gc.CreatedAt
+                })
+                .ToListAsync();
+
+            return groupChats;
+        }
+
+        public async Task<IEnumerable<ChatRoomDto>> GetPrivateChatsForFolderAsync(int folderId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            return await _context.PrivateChatRooms
+            .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == currentUserId) && cr.FolderId == folderId)
             .Select(cr => new ChatRoomDto
             {
                 Id = cr.Id,
-                Name = cr.Name,
                 CreatedAt = cr.CreatedAt
             })
             .ToListAsync();
         }
 
-        public async Task<IEnumerable<ChatRoomDto>> GetChatsWithoutFolder()
+        public async Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsForFolderAsync(int folderId)
         {
+            // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
             {
-                return Enumerable.Empty<ChatRoomDto>();
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
-            return await _context.ChatRooms
+            return await _context.GroupChatRooms
+            .Where(gr => gr.GroupChatMembers.Any(gc => gc.UserId == currentUserId) && gr.FolderId == folderId)
+            .Select(gr => new GroupChatRoomDto
+            {
+                Id = gr.Id,
+                Name = gr.Name,
+                CreatedAt = gr.CreatedAt,
+                OwnerId = gr.OwnerId,
+                Members = gr.GroupChatMembers.Select(gm => new GroupChatMemberDto
+                {
+                    UserId = gm.UserId,
+                    Role = gm.Role
+                }).ToList()
+            })
+            .ToListAsync();
+        }
+
+        public async Task<IEnumerable<ChatRoomDto>> GetPrivateChatsWithoutFolderAsync()
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            return await _context.PrivateChatRooms
             .Include(cr => cr.UserChatRooms)
-            .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == userId) && cr.FolderId == null)
+            .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == currentUserId) && cr.FolderId == null)
             .Select(cr => new ChatRoomDto
             {
                 Id = cr.Id,
-                Name = cr.Name,
                 CreatedAt = cr.CreatedAt
+            })
+            .ToListAsync();
+        }
+
+        public async Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsWithoutFolderAsync()
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            return await _context.GroupChatRooms
+            .Where(gr => gr.GroupChatMembers.Any(gc => gc.UserId == currentUserId) && gr.FolderId == null)
+            .Select(gr => new GroupChatRoomDto
+            {
+                Id = gr.Id,
+                Name = gr.Name,
+                CreatedAt = gr.CreatedAt,
+                OwnerId = gr.OwnerId,
+                Members = gr.GroupChatMembers.Select(gm => new GroupChatMemberDto
+                {
+                    UserId = gm.UserId,
+                    Role = gm.Role
+                }).ToList()
             })
             .ToListAsync();
         }

@@ -1,4 +1,4 @@
-﻿using ChatService.DTOs;
+﻿using ChatServiceDTOs.Chats;
 using ChatService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,44 +17,86 @@ namespace ChatService.Controllers
             _chatService = chatService;
         }
 
-        // POST: api/chat/create
+        // POST: api/chat/create-private
         // Створює новий чат
-        [Authorize]
-        [HttpPost("create")]
-        public async Task<IActionResult> CreateChatRoom([FromBody] CreateChatRoomDto model)
+        [HttpPost("create-private")]
+        public async Task<IActionResult> CreatePrivateChat([FromBody] CreatePrivateChatRoomDto model)
+        {
+            if (model == null)
+            {
+                return BadRequest(new { Message = "Невірні дані для створення приватного чату." });
+            }
+
+            var response = await _chatService.CreatePrivateChatRoomAsync(model);
+            return Ok(response);
+        }
+
+        // POST: api/chat/create-group
+        // Створює новий чат
+        [HttpPost("create-group")]
+        public async Task<IActionResult> CreateGroupChat([FromBody] CreateGroupChatRoomDto model)
         {
             if (model == null || string.IsNullOrWhiteSpace(model.Name))
             {
-                return BadRequest(new { Message = "Невірні дані для створення чату." });
+                return BadRequest(new { Message = "Невірні дані для створення групового чату." });
             }
 
-            // Формування відповіді з даними створеного чату
-            var response = await _chatService.CreateChatRoomAsync(model);
-
+            var response = await _chatService.CreateGroupChatRoomAsync(model);
             return Ok(response);
         }
 
-        // GET: api/chat
+        // GET: api/chat/private
         // Отримує список чатів без папки
-        [Authorize]
-        [HttpGet]
-        public async Task<IActionResult> GetChatRoomsForUser()
+        [HttpGet("private")]
+        public async Task<IActionResult> GetPrivateChatsForUser()
         {
-            Console.WriteLine("IN GetChatRoomsForUser");
-            var response = await _chatService.GetChatsWithoutFolder();
-
-            return Ok(response);
+            var chats = await _chatService.GetPrivateChatRoomsForUserAsync();
+            return Ok(chats);
         }
 
-        // GET: api/chat/folder/{Id}
-        // Отримує список чатів з папки
-        [Authorize]
-        [HttpGet("folder/{Id}")]
-        public async Task<IActionResult> GetChatRoomsForFolder(int Id)
+        // GET: api/chat/group
+        // Отримує список чатів без папки
+        [HttpGet("group")]
+        public async Task<IActionResult> GetGroupChatsForUser()
         {
-            var response = await _chatService.GetChatsForFolder(Id);
+            var chats = await _chatService.GetGroupChatRoomsForUserAsync();
+            return Ok(chats);
+        }
 
-            return Ok(response);
+        // GET: api/chat/private/folder/{folderId}
+        // Отримує список приватних чатів з папки
+        [HttpGet("private/folder/{folderId}")]
+        public async Task<IActionResult> GetPrivateChatsForFolder(int folderId)
+        {
+            var chats = await _chatService.GetPrivateChatsForFolderAsync(folderId);
+            return Ok(chats);
+        }
+
+        // GET: api/chat/group/folder/{folderId}
+        // Отримує список групових чатів з папки
+        [HttpGet("group/folder/{folderId}")]
+        public async Task<IActionResult> GetGroupChatsForFolder(int folderId)
+        {
+            var chats = await _chatService.GetGroupChatsForFolderAsync(folderId);
+            return Ok(chats);
+        }
+
+        // GET: api/chat/private/no-folder
+        // Отримує список приватних чатів без папки
+        [HttpGet("private/no-folder")]
+        public async Task<IActionResult> GetPrivateChatsWithoutFolder()
+        {
+            var chats = await _chatService.GetPrivateChatsWithoutFolderAsync();
+            return Ok(chats);
+        }
+
+        // GET: api/chat/group/no-folder
+        // Отримує список групових чатів без папки
+        [HttpGet("group/no-folder")]
+        public async Task<IActionResult> GetGroupChatsWithoutFolder()
+        {
+            var chats = await _chatService.GetGroupChatsWithoutFolderAsync();
+            return Ok(chats);
         }
     }
 }

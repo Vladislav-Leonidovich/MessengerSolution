@@ -1,4 +1,4 @@
-﻿using ChatService.DTOs;
+﻿using ChatServiceDTOs.Folders;
 using ChatService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

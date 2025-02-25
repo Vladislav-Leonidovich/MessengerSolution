@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChatService.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20250220201551_UpdateFolderDto")]
-    partial class UpdateFolderDto
+    [Migration("20250224200218_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -28,21 +28,26 @@ namespace ChatService.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
+                    b.Property<string>("ChatRoomType")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("varchar(8)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
                     b.Property<int?>("FolderId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
                     b.HasKey("Id");
 
                     b.HasIndex("FolderId");
 
                     b.ToTable("ChatRooms");
+
+                    b.HasDiscriminator<string>("ChatRoomType").HasValue("ChatRoom");
+
+                    b.UseTphMappingStrategy();
                 });
 
             modelBuilder.Entity("ChatService.Models.Folder", b =>
@@ -68,17 +73,54 @@ namespace ChatService.Migrations
                     b.ToTable("Folders");
                 });
 
-            modelBuilder.Entity("ChatService.Models.UserChatRoom", b =>
+            modelBuilder.Entity("ChatService.Models.GroupChatMember", b =>
                 {
-                    b.Property<int>("ChatRoomId")
+                    b.Property<int>("GroupChatRoomId")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.HasKey("ChatRoomId", "UserId");
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("GroupChatRoomId", "UserId");
+
+                    b.ToTable("GroupChatMembers");
+                });
+
+            modelBuilder.Entity("ChatService.Models.UserChatRoom", b =>
+                {
+                    b.Property<int>("PrivateChatRoomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PrivateChatRoomId", "UserId");
 
                     b.ToTable("UserChatRooms");
+                });
+
+            modelBuilder.Entity("ChatService.Models.GroupChatRoom", b =>
+                {
+                    b.HasBaseType("ChatService.Models.ChatRoom");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("OwnerId")
+                        .HasColumnType("int");
+
+                    b.HasDiscriminator().HasValue("Group");
+                });
+
+            modelBuilder.Entity("ChatService.Models.PrivateChatRoom", b =>
+                {
+                    b.HasBaseType("ChatService.Models.ChatRoom");
+
+                    b.HasDiscriminator().HasValue("Private");
                 });
 
             modelBuilder.Entity("ChatService.Models.ChatRoom", b =>
@@ -91,25 +133,41 @@ namespace ChatService.Migrations
                     b.Navigation("Folder");
                 });
 
-            modelBuilder.Entity("ChatService.Models.UserChatRoom", b =>
+            modelBuilder.Entity("ChatService.Models.GroupChatMember", b =>
                 {
-                    b.HasOne("ChatService.Models.ChatRoom", "ChatRoom")
-                        .WithMany("UserChatRooms")
-                        .HasForeignKey("ChatRoomId")
+                    b.HasOne("ChatService.Models.GroupChatRoom", "GroupChatRoom")
+                        .WithMany("GroupChatMembers")
+                        .HasForeignKey("GroupChatRoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ChatRoom");
+                    b.Navigation("GroupChatRoom");
                 });
 
-            modelBuilder.Entity("ChatService.Models.ChatRoom", b =>
+            modelBuilder.Entity("ChatService.Models.UserChatRoom", b =>
                 {
-                    b.Navigation("UserChatRooms");
+                    b.HasOne("ChatService.Models.PrivateChatRoom", "PrivateChatRoom")
+                        .WithMany("UserChatRooms")
+                        .HasForeignKey("PrivateChatRoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PrivateChatRoom");
                 });
 
             modelBuilder.Entity("ChatService.Models.Folder", b =>
                 {
                     b.Navigation("ChatRooms");
+                });
+
+            modelBuilder.Entity("ChatService.Models.GroupChatRoom", b =>
+                {
+                    b.Navigation("GroupChatMembers");
+                });
+
+            modelBuilder.Entity("ChatService.Models.PrivateChatRoom", b =>
+                {
+                    b.Navigation("UserChatRooms");
                 });
 #pragma warning restore 612, 618
         }

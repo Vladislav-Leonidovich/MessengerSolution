@@ -1,4 +1,4 @@
-﻿using ChatService.DTOs;
+﻿using ChatServiceDTOs.Folders;
 using ChatService.Models;
 using ChatService.Data;
 using Microsoft.EntityFrameworkCore;
@@ -21,10 +21,11 @@ namespace ChatService.Services
         // Метод для створення нової папки
         public async Task<FolderDto> CreateFolderAsync(CreateFolderDto model)
         {
+            // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
             {
-                return new FolderDto();
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
             // Створюємо нову папку
@@ -32,7 +33,7 @@ namespace ChatService.Services
             {
                 Name = model.Name,
                 Order = model.Order,
-                UserId = userId
+                UserId = currentUserId
             };
 
             _context.Folders.Add(folder);
@@ -62,14 +63,15 @@ namespace ChatService.Services
 
         public async Task<IEnumerable<FolderDto>> GetFoldersAsync()
         {
+            // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
             {
-                return Enumerable.Empty<FolderDto>();
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
             return await _context.Folders
-                .Where(f => f.UserId == userId)
+                .Where(f => f.UserId == currentUserId)
                 .Select(f => new FolderDto
                 {
                     Id = f.Id,
@@ -81,7 +83,15 @@ namespace ChatService.Services
 
         public async Task<bool> UpdateFolderAsync(FolderDto folderDto)
         {
-            var folder = await _context.Folders.FindAsync(folderDto.Id);
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.Id == folderDto.Id);
+
             if (folder == null)
                 return false;
 
@@ -94,7 +104,14 @@ namespace ChatService.Services
 
         public async Task<bool> DeleteFolderAsync(int folderId)
         {
-            var folder = await _context.Folders.FindAsync(folderId);
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.Id == folderId);
             if (folder == null)
                 return false;
 
@@ -103,10 +120,18 @@ namespace ChatService.Services
             return true;
         }
 
-        public async Task<bool> AssignChatToFolderAsync(int chatId, int folderId)
+        public async Task<bool> AssignPrivateChatToFolderAsync(int chatId, int folderId)
         {
-            var chat = await _context.ChatRooms.FindAsync(chatId);
-            var folder = await _context.Folders.FindAsync(folderId);
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.PrivateChatRooms.FirstOrDefaultAsync(pcr => pcr.Id == chatId && pcr.UserChatRooms.Any(ucr => ucr.UserId == currentUserId));
+            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == currentUserId);
+
             if (chat == null || folder == null)
                 return false;
 
@@ -115,9 +140,54 @@ namespace ChatService.Services
             return true;
         }
 
-        public async Task<bool> UnassignChatFromFolderAsync(int chatId)
+        public async Task<bool> UnassignPrivateChatFromFolderAsync(int chatId)
         {
-            var chat = await _context.ChatRooms.FindAsync(chatId);
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.PrivateChatRooms.FirstOrDefaultAsync(pcr => pcr.Id == chatId && pcr.UserChatRooms.Any(ucr => ucr.UserId == currentUserId));
+            if (chat == null || chat.FolderId == null)
+                return false;
+
+            chat.FolderId = null;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> AssignGroupChatToFolderAsync(int chatId, int folderId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(gcr => gcr.Id == chatId && gcr.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId));
+            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == currentUserId);
+
+            if (chat == null || folder == null)
+                return false;
+
+            chat.FolderId = folderId;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UnassignGroupChatFromFolderAsync(int chatId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(gcr => gcr.Id == chatId && gcr.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId));
             if (chat == null || chat.FolderId == null)
                 return false;
 

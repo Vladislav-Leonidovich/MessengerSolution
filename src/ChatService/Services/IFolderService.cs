@@ -1,4 +1,4 @@
-﻿using ChatService.DTOs;
+﻿using ChatServiceDTOs.Folders;
 using ChatService.Models;
 namespace ChatService.Services
 {
@@ -16,10 +16,16 @@ namespace ChatService.Services
         // Видалення папки
         Task<bool> DeleteFolderAsync(int folderId);
 
-        // Призначення чату до папки
-        Task<bool> AssignChatToFolderAsync(int chatId, int folderId);
+        // Призначення приватного чату до папки
+        Task<bool> AssignPrivateChatToFolderAsync(int chatId, int folderId);
+        // Відв'язування приватного чату від папки
 
-        // Відв'язування чату від папки
-        Task<bool> UnassignChatFromFolderAsync(int chatId);
+        Task<bool> UnassignPrivateChatFromFolderAsync(int chatId);
+        // Призначення групового чату до папки
+
+        Task<bool> AssignGroupChatToFolderAsync(int chatId, int folderId);
+
+        // Відв'язування групового чату від папки
+        Task<bool> UnassignGroupChatFromFolderAsync(int chatId);
     }
 }

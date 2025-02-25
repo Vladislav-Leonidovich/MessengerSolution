@@ -45,14 +45,14 @@ namespace ChatService.Data
                 .WithOne(gm => gm.GroupChatRoom)
                 .HasForeignKey(gm => gm.GroupChatRoomId);
 
-            // Зв'язок між ChatRoom та Folder, як раніше
+            // Встановлюємо зв'язок між ChatRoom та Folder, використовуючи наявну властивість FolderId
             modelBuilder.Entity<ChatRoom>()
-                .HasOne<Folder>()
+                .HasOne(cr => cr.Folder)
                 .WithMany(f => f.ChatRooms)
-                .HasForeignKey("FolderId")
+                .HasForeignKey(cr => cr.FolderId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Налаштування папок
+            // Налаштування для Folder
             modelBuilder.Entity<Folder>()
                 .HasIndex(f => f.UserId);
             modelBuilder.Entity<Folder>()

@@ -1,4 +1,6 @@
-﻿namespace ChatService.Models
+﻿using ChatServiceModels.Chats;
+
+namespace ChatService.Models
 {
     public class GroupChatMember
     {
