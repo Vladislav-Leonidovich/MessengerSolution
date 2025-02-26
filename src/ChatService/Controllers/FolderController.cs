@@ -15,8 +15,9 @@ namespace ChatService.Controllers
         {
             _folderService = folderService;
         }
+
+        // Отримує список папок
         // GET: api/folder
-        // Отримує список папок для вказаного користувача
         [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetFolders()
@@ -25,8 +26,10 @@ namespace ChatService.Controllers
             return Ok(folders);
         }
 
+        // Створює папку
+        // POST: api/folder/create
         [Authorize]
-        [HttpPost]
+        [HttpPost("create")]
         public async Task<IActionResult> CreateFolder([FromBody] CreateFolderDto folderDto)
         {
             var createdFolder = await _folderService.CreateFolderAsync(folderDto);
@@ -34,16 +37,11 @@ namespace ChatService.Controllers
         }
 
         // Ендпоінт для оновлення даних папки
-        // Використовуємо PUT, щоб оновити всю інформацію про папку
+        // PUT: api/folder/update
         [Authorize]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateFolder(int id, [FromBody] FolderDto folderDto)
+        [HttpPut("update")]
+        public async Task<IActionResult> UpdateFolder([FromBody] FolderDto folderDto)
         {
-            if (id != folderDto.Id)
-            {
-                return BadRequest("Ідентифікатори не співпадають.");
-            }
-
             var result = await _folderService.UpdateFolderAsync(folderDto);
             if (!result)
             {
@@ -52,11 +50,12 @@ namespace ChatService.Controllers
             return NoContent();
         }
         // Ендпоінт для видалення папки
+        // DELETE: api/folder/delete/{folderId}
         [Authorize]
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteFolder(int id)
+        [HttpDelete("delete/{folderId}")]
+        public async Task<IActionResult> DeleteFolder(int folderId)
         {
-            var result = await _folderService.DeleteFolderAsync(id);
+            var result = await _folderService.DeleteFolderAsync(folderId);
             if (!result)
             {
                 return NotFound();
@@ -64,13 +63,55 @@ namespace ChatService.Controllers
             return NoContent();
         }
 
-        // Ендпоінт для призначення чату до папки
-        // Наприклад, шлях: api/folder/{folderId}/assign-chat/{chatId}
+        // Ендпоінт для призначення приватного чату до папки
+        // POST: api/folder/{folderId}/assign-private-chat/{chatId}
         [Authorize]
-        [HttpPost("{folderId}/assign-chat/{chatId}")]
-        public async Task<IActionResult> AssignChatToFolder(int folderId, int chatId)
+        [HttpPost("{folderId}/assign-private-chat/{chatId}")]
+        public async Task<IActionResult> AssignPrivateChatToFolder(int folderId, int chatId)
         {
-            var result = await _folderService.AssignChatToFolderAsync(chatId, folderId);
+            var result = await _folderService.AssignPrivateChatToFolderAsync(chatId, folderId);
+            if (!result)
+            {
+                return NotFound("Чат або папку не знайдено.");
+            }
+            return Ok();
+        }
+
+        // Ендпоінт для від'єднання приватного чату від папки
+        // POST: api/folder/{folderId}/unassign-private-chat/{chatId}
+        [Authorize]
+        [HttpPost("{folderId}/unassign-private-chat/{chatId}")]
+        public async Task<IActionResult> UnassignPrivateChatFromFolder(int chatId)
+        {
+            var result = await _folderService.UnassignPrivateChatFromFolderAsync(chatId);
+            if (!result)
+            {
+                return NotFound("Чат або папку не знайдено.");
+            }
+            return Ok();
+        }
+
+        // Ендпоінт для призначення групового чату до папки
+        // POST: api/folder/{folderId}/assign-group-chat/{chatId}
+        [Authorize]
+        [HttpPost("{folderId}/assign-group-chat/{chatId}")]
+        public async Task<IActionResult> AssignGroupChatToFolder(int folderId, int chatId)
+        {
+            var result = await _folderService.AssignGroupChatToFolderAsync(chatId, folderId);
+            if (!result)
+            {
+                return NotFound("Чат або папку не знайдено.");
+            }
+            return Ok();
+        }
+
+        // Ендпоінт для від'єднання групового чату від папки
+        // POST: api/folder/{folderId}/unassign-group-chat/{chatId}
+        [Authorize]
+        [HttpPost("{folderId}/unassign-group-chat/{chatId}")]
+        public async Task<IActionResult> UnassignGroupChatFromFolder(int chatId)
+        {
+            var result = await _folderService.UnassignGroupChatFromFolderAsync(chatId);
             if (!result)
             {
                 return NotFound("Чат або папку не знайдено.");

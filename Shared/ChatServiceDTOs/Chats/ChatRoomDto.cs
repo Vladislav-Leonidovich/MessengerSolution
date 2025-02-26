@@ -7,5 +7,8 @@ namespace ChatServiceDTOs.Chats
     {
         public int Id { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string Name { get; set; } = string.Empty;
+        // Список ідентифікаторів учасників
+        public IEnumerable<int> ParticipantIds { get; set; } = new List<int>();
     }
 }

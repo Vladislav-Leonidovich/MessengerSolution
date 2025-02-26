@@ -2,6 +2,7 @@
 using IdentityService.Models;
 using IdentityService.Services;
 using IdentityService.DTOs;
+using Shared.IdentityServiceDTOs;
 
 namespace IdentityService.Controllers
 {
@@ -17,7 +18,7 @@ namespace IdentityService.Controllers
 
         // POST: api/auth/register
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterModel model)
+        public async Task<IActionResult> Register([FromBody] RegisterDto model)
         {
             try
             {
@@ -32,7 +33,7 @@ namespace IdentityService.Controllers
 
         // POST: api/auth/login
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginModel model)
+        public async Task<IActionResult> Login([FromBody] LoginDto model)
         {
             var authResponse = await _authService.LoginAsync(model);
             if (authResponse == null)

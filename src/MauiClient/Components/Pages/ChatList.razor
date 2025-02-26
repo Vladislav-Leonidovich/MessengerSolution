@@ -18,19 +18,18 @@ else
 		@foreach (var chat in chatRooms)
 		{
 			<li>
+				@chat
 			</li>
 		}
 	</ul>
 }
 
 @code {
-	// Для прикладу, userId задаємо статично; у реальному додатку отримуйте його після автентифікації
-	private int userId = 1;
 	private IEnumerable<ChatRoomDto> chatRooms = new List<ChatRoomDto>();
 
 	protected override async Task OnInitializedAsync()
 	{
-		chatRooms = await ChatService.GetPrivateChatRoomsAsync(userId);
+		chatRooms = await ChatService.GetPrivateChatRoomsAsync();
 	}
 
 	private void OpenChat(int chatId)

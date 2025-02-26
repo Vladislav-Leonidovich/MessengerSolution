@@ -15,11 +15,10 @@
 </ul>
 
 @code {
-    private int userId = 1;
     private IEnumerable<FolderDto>? folders = new List<FolderDto>();
     protected override async Task OnInitializedAsync()
     {
-        folders = await FolderService.GetFoldersAsync(userId);
+        folders = await FolderService.GetFoldersAsync();
     }
 
     private void OnFolderSelected(int folderId)

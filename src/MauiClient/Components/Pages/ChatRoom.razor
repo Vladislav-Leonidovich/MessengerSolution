@@ -11,13 +11,6 @@
 }
 else
 {
-    <p>Дата створення: @chatRoom.CreatedAt.ToString("g")</p>
-    <ul>
-        @foreach (var userId in chatRoom.UserIds)
-        {
-            <li>Користувач ID: @userId</li>
-        }
-    </ul>
     <!-- Можна додати форму для надсилання повідомлень -->
 }
 
@@ -30,8 +23,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var chats = await ChatService.GetPrivateChatRoomsAsync(1); // приклад: userId = 1
+        var chats = await ChatService.GetPrivateChatRoomsAsync();
         chatRoom = chats.FirstOrDefault(c => c.Id == ChatRoomId);
-        ChatRoomName = chatRoom?.Name ?? "Невідомий чат";
     }
 }

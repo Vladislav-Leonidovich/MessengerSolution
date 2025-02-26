@@ -6,6 +6,8 @@ using ChatServiceModels.Chats;
 using ChatService.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http;
+using Shared.IdentityServiceDTOs;
 
 namespace ChatService.Services
 {
@@ -13,11 +15,13 @@ namespace ChatService.Services
     {
         private readonly ChatDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly HttpClient _httpClient; // Для виклику IdentityService
 
-        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor)
+        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor, HttpClient httpClient)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
+            _httpClient = httpClient;
         }
 
         // Метод для створення групового чату
@@ -108,10 +112,19 @@ namespace ChatService.Services
             _context.PrivateChatRooms.Add(privateChatRoom);
             await _context.SaveChangesAsync();
 
+            int? partnerId = privateChatRoom.UserChatRooms.FirstOrDefault(uc => uc.UserId != currentUserId)?.UserId;
+            string partnerDisplayName = partnerId.HasValue
+                ? await GetUserDisplayNameByIdAsync(partnerId.Value)
+                : "Unknown";
+
+
+
             var dto = new ChatRoomDto
             {
                 Id = privateChatRoom.Id,
-                CreatedAt = privateChatRoom.CreatedAt
+                CreatedAt = privateChatRoom.CreatedAt,
+                Name = partnerDisplayName,
+                ParticipantIds = privateChatRoom.UserChatRooms.Select(uc => uc.UserId).ToList()
             };
 
             return dto;
@@ -131,14 +144,43 @@ namespace ChatService.Services
             var privateChats = await _context.PrivateChatRooms
                 .Include(pcr => pcr.UserChatRooms)
                 .Where(pcr => pcr.UserChatRooms.Any(puc => puc.UserId == currentUserId))
-                .Select(pcr => new ChatRoomDto
-                {
-                    Id = pcr.Id,
-                    CreatedAt = pcr.CreatedAt
-                })
                 .ToListAsync();
 
-            return privateChats;
+            var chatDtos = new List<ChatRoomDto>();
+
+
+            foreach (var chat in privateChats)
+            {
+                // Якщо в чаті є саме 2 учасники, визначаємо співрозмовника
+                if (chat.UserChatRooms.Count == 2)
+                {
+                    var partnerId = chat.UserChatRooms.FirstOrDefault(uc => uc.UserId != currentUserId)?.UserId;
+                    string partnerDisplayName = partnerId.HasValue
+                        ? await GetUserDisplayNameByIdAsync(partnerId.Value) // Виклик до IdentityService
+                        : "Unknown";
+
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = partnerDisplayName,
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+                else
+                {
+                    // Якщо кількість учасників не дорівнює 2, можна повернути інший формат
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = "Приватний чат",
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+            }
+
+            return chatDtos;
         }
 
         // Метод для отримання всіх приватних чатів, у яких бере участь користувач
@@ -175,14 +217,47 @@ namespace ChatService.Services
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
-            return await _context.PrivateChatRooms
-            .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == currentUserId) && cr.FolderId == folderId)
-            .Select(cr => new ChatRoomDto
+            // Отримуємо приватні чати, де поточний користувач бере участь
+            var privateChats = await _context.PrivateChatRooms
+                .Include(pcr => pcr.UserChatRooms)
+                .Where(pcr => pcr.UserChatRooms.Any(puc => puc.UserId == currentUserId) && pcr.FolderId == folderId)
+                .ToListAsync();
+
+            var chatDtos = new List<ChatRoomDto>();
+
+
+            foreach (var chat in privateChats)
             {
-                Id = cr.Id,
-                CreatedAt = cr.CreatedAt
-            })
-            .ToListAsync();
+                // Якщо в чаті є саме 2 учасники, визначаємо співрозмовника
+                if (chat.UserChatRooms.Count == 2)
+                {
+                    var partnerId = chat.UserChatRooms.FirstOrDefault(uc => uc.UserId != currentUserId)?.UserId;
+                    string partnerDisplayName = partnerId.HasValue
+                        ? await GetUserDisplayNameByIdAsync(partnerId.Value) // Виклик до IdentityService
+                        : "Unknown";
+
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = partnerDisplayName,
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+                else
+                {
+                    // Якщо кількість учасників не дорівнює 2, можна повернути інший формат
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = "Приватний чат",
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+            }
+
+            return chatDtos;
         }
 
         public async Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsForFolderAsync(int folderId)
@@ -220,15 +295,47 @@ namespace ChatService.Services
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
-            return await _context.PrivateChatRooms
-            .Include(cr => cr.UserChatRooms)
-            .Where(cr => cr.UserChatRooms.Any(uc => uc.UserId == currentUserId) && cr.FolderId == null)
-            .Select(cr => new ChatRoomDto
+            // Отримуємо приватні чати, де поточний користувач бере участь
+            var privateChats = await _context.PrivateChatRooms
+                .Include(pcr => pcr.UserChatRooms)
+                .Where(pcr => pcr.UserChatRooms.Any(puc => puc.UserId == currentUserId) && pcr.FolderId == null)
+                .ToListAsync();
+
+            var chatDtos = new List<ChatRoomDto>();
+
+
+            foreach (var chat in privateChats)
             {
-                Id = cr.Id,
-                CreatedAt = cr.CreatedAt
-            })
-            .ToListAsync();
+                // Якщо в чаті є саме 2 учасники, визначаємо співрозмовника
+                if (chat.UserChatRooms.Count == 2)
+                {
+                    var partnerId = chat.UserChatRooms.FirstOrDefault(uc => uc.UserId != currentUserId)?.UserId;
+                    string partnerDisplayName = partnerId.HasValue
+                        ? await GetUserDisplayNameByIdAsync(partnerId.Value) // Виклик до IdentityService
+                        : "Unknown";
+
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = partnerDisplayName,
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+                else
+                {
+                    // Якщо кількість учасників не дорівнює 2, можна повернути інший формат
+                    chatDtos.Add(new ChatRoomDto
+                    {
+                        Id = chat.Id,
+                        CreatedAt = chat.CreatedAt,
+                        Name = "Private chat",
+                        ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
+                    });
+                }
+            }
+
+            return chatDtos;
         }
 
         public async Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsWithoutFolderAsync()
@@ -255,6 +362,14 @@ namespace ChatService.Services
                 }).ToList()
             })
             .ToListAsync();
+        }
+
+        // Метод для отримання DisplayName співрозмовника через IdentityService
+        private async Task<string> GetUserDisplayNameByIdAsync(int userId)
+        {
+            // Приклад: використання HttpClient для виклику IdentityService
+            var response = await _httpClient.GetFromJsonAsync<UserDto>($"https://localhost:7101/api/users/search/id/{userId}");
+            return response?.DisplayName ?? "Unknown";
         }
     }
 }

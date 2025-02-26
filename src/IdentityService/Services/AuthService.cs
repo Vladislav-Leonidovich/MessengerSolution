@@ -7,6 +7,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Shared.IdentityServiceDTOs;
 
 namespace IdentityService.Services
 {
@@ -26,19 +27,22 @@ namespace IdentityService.Services
             return await _context.Users.AnyAsync(u => u.UserName == username || u.Email == email);
         }
 
-        public async Task<User> RegisterAsync(RegisterModel model)
+        public async Task<User> RegisterAsync(RegisterDto model)
         {
             if (await UserExistsAsync(model.UserName, model.Email))
             {
                 throw new Exception("Користувач із таким ім'ям або email вже існує");
             }
 
+            // Автоматически добавляем "@" если отсутствует
+            var userName = model.UserName.StartsWith("@") ? model.UserName : "@" + model.UserName;
+
             // Генерація хеша пароля
             CreatePasswordHash(model.Password, out byte[] passwordHash, out byte[] passwordSalt);
 
             var user = new User
             {
-                UserName = model.UserName,
+                UserName = userName,
                 Email = model.Email,
                 PasswordHash = passwordHash,
                 PasswordSalt = passwordSalt,
@@ -52,7 +56,7 @@ namespace IdentityService.Services
             return user;
         }
 
-        public async Task<AuthResponse?> LoginAsync(LoginModel model)
+        public async Task<AuthDto?> LoginAsync(LoginDto model)
         {
             // Пошук користувача по имені
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == model.UserName);
@@ -89,7 +93,7 @@ namespace IdentityService.Services
         }
 
         // Створення JWT токена для аутентифікованого користувача
-        private AuthResponse CreateToken(User user)
+        private AuthDto CreateToken(User user)
         {
             var jwtSecretKey = _configuration["JWT_SECRET_KEY"];
             if (string.IsNullOrEmpty(jwtSecretKey))
@@ -117,7 +121,7 @@ namespace IdentityService.Services
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
-            return new AuthResponse
+            return new AuthDto
             {
                 Token = tokenHandler.WriteToken(token),
                 ExpiresAt = tokenDescriptor.Expires.Value

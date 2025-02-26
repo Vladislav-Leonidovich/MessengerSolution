@@ -29,8 +29,9 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
 
 builder.Services.AddControllers();
 
-// Реєструємо наш сервіс аутентифікації, який реалізує IAuthService
+// Реєструємо наші сервіси
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ISearchService, SearchService>();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
