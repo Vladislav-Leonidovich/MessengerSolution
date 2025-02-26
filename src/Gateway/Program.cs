@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Додаємо CORS-політику
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowBlazorClient", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
         // У режимі розробки часто дозволяють усе, але в продакшені краще обмежити Origins
         policy.AllowAnyOrigin()
@@ -22,22 +22,6 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
-
-// Реєстрація YARP (Reverse Proxy) та завантаження конфігурації з секції "ReverseProxy" з appsettings.json
-builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
-
-if (builder.Environment.IsDevelopment())
-{
-    // Реєструємо іменований HttpClient для YARP і налаштовуємо його так, щоб у режимі розробки приймав будь-які сертифікати
-    builder.Services.AddHttpClient("ReverseProxy")
-        .ConfigurePrimaryHttpMessageHandler(() =>
-        {
-            var handler = new HttpClientHandler();
-            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            return handler;
-        });
-}
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -60,6 +44,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Реєстрація YARP (Reverse Proxy) та завантаження конфігурації з секції "ReverseProxy" з appsettings.json
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+
+if (builder.Environment.IsDevelopment())
+{
+    // Реєструємо іменований HttpClient для YARP і налаштовуємо його так, щоб у режимі розробки приймав будь-які сертифікати
+    builder.Services.AddHttpClient("ReverseProxy")
+        .ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            return handler;
+        });
+}
+
 // Додаємо підтримку контролерів (наприклад, для health-check)
 builder.Services.AddControllers();
 
@@ -67,7 +67,7 @@ builder.Services.AddControllers();
 var app = builder.Build();
 
 // Застосовуємо CORS-політику для всіх запитів
-app.UseCors("AllowBlazorClient");
+app.UseCors("AllowAll");
 
 app.UseAuthentication();
 

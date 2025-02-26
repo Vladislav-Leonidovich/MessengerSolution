@@ -18,7 +18,7 @@ namespace MessageService.Controllers
         // POST: api/message/send
         // Створює нове повідомлення
         [HttpPost("send")]
-        public async Task<IActionResult> SendMessage([FromBody] SendMessageModel model)
+        public async Task<IActionResult> SendMessage([FromBody] SendMessageDto model)
         {
             if (model == null || string.IsNullOrWhiteSpace(model.Content))
             {
@@ -27,7 +27,7 @@ namespace MessageService.Controllers
 
             var message = await _messageService.SendMessageAsync(model);
             // Повертаємо відповідь із даними створеного повідомлення
-            return Ok(new MessageResponse
+            return Ok(new MessageDto
             {
                 Id = message.Id,
                 ChatRoomId = message.ChatRoomId,
@@ -44,7 +44,7 @@ namespace MessageService.Controllers
         {
             var messages = await _messageService.GetMessagesAsync(chatRoomId, pageNumber, pageSize);
             // Перетворюємо кожне повідомлення в MessageResponse для уніфікованої відповіді
-            var response = messages.Select(m => new MessageResponse
+            var response = messages.Select(m => new MessageDto
             {
                 Id = m.Id,
                 ChatRoomId = m.ChatRoomId,

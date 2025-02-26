@@ -1,4 +1,4 @@
-﻿using EncryptionService.DTOs;
+﻿using EncryptionServiceDTOs;
 using EncryptionService.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,7 +21,7 @@ namespace EncryptionService.Controllers
         {
             try
             {
-                var cipherText = _encryptionService.Encrypt(request.PlainText, request.Key);
+                var cipherText = _encryptionService.Encrypt(request.PlainText);
                 return Ok(new { CipherText = cipherText });
             }
             catch (Exception ex)
@@ -38,7 +38,7 @@ namespace EncryptionService.Controllers
         {
             try
             {
-                var plainText = _encryptionService.Decrypt(request.CipherText, request.Key);
+                var plainText = _encryptionService.Decrypt(request.CipherText);
                 return Ok(new { PlainText = plainText });
             }
             catch (Exception ex)

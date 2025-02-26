@@ -3,9 +3,9 @@
     public interface IEncryptionService
     {
         // Зашифрувати вихідний текст із використанням переданого ключа
-        string Encrypt(string plainText, string key);
+        string Encrypt(string plainText);
 
         // Дешифрувати зашифрований текст з використанням переданого ключа
-        string Decrypt(string cipherText, string key);
+        string Decrypt(string cipherText);
     }
 }

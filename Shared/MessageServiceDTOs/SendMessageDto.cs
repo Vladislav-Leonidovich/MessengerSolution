@@ -1,6 +1,6 @@
 ﻿namespace MessageService.DTOs
 {
-    public class SendMessageModel
+    public class SendMessageDto
     {
         // Ідентифікатор чату, в який надсилається повідомлення
         public int ChatRoomId { get; set; }

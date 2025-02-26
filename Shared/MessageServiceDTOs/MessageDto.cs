@@ -1,6 +1,6 @@
 ﻿namespace MessageService.DTOs
 {
-    public class MessageResponse
+    public class MessageDto
     {
         public int Id { get; set; }
         public int ChatRoomId { get; set; }

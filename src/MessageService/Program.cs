@@ -1,8 +1,22 @@
+using MassTransit;
 using MessageService.Data;
 using MessageService.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Налаштування MassTransit з RabbitMQ
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("rabbitmq://localhost", h =>
+        {
+            h.Username("guest");
+            h.Password("guest");
+        });
+    });
+});
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("MessageDatabase")
