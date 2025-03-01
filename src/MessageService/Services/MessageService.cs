@@ -1,10 +1,12 @@
 ﻿using MassTransit;
 using MessageService.Data;
-using MessageService.DTOs;
+using MessageServiceDTOs;
 using MessageService.Models;
 using Microsoft.EntityFrameworkCore;
 using Shared.Contracts;
 using EncryptionServiceDTOs;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MessageService.Services
 {
@@ -12,17 +14,30 @@ namespace MessageService.Services
     {
         private readonly MessageDbContext _dbContext;
         private readonly IPublishEndpoint _publishEndpoint;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly HttpClient _chatClient;
         private readonly HttpClient _encryptionClient;
+        private readonly HttpClient _identityClient;
 
-        public MessageService(MessageDbContext dbContext, IPublishEndpoint publishEndpoint, HttpClient encryptionClient)
+        public MessageService(MessageDbContext dbContext, IPublishEndpoint publishEndpoint, IHttpClientFactory httpClientFactory, IHttpContextAccessor httpContextAccessor)
         {
             _dbContext = dbContext;
             _publishEndpoint = publishEndpoint;
-            _encryptionClient = encryptionClient;
+            _chatClient = httpClientFactory.CreateClient("ChatClient");
+            _encryptionClient = httpClientFactory.CreateClient("EncryptionClient");
+            _identityClient = httpClientFactory.CreateClient("IdentityClient");
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<Message> SendMessageAsync(SendMessageDto model)
+        public async Task<MessageDto> SendMessageAsync(SendMessageDto model)
         {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
             // Викликаємо API EncryptionService для шифрування
             var encryptionRequest = new EncryptionRequest
             {
@@ -41,7 +56,7 @@ namespace MessageService.Services
             var message = new Message
             {
                 ChatRoomId = model.ChatRoomId,
-                SenderUserId = model.SenderUserId,
+                SenderUserId = currentUserId,
                 Content = encryptedContent,
                 CreatedAt = DateTime.UtcNow
             };
@@ -60,11 +75,27 @@ namespace MessageService.Services
                 CreatedAt = message.CreatedAt
             });
 
-            return message;
+            var messageDto = new MessageDto
+            {
+                Id = message.Id,
+                ChatRoomId = message.ChatRoomId,
+                SenderUserId = message.SenderUserId,
+                Content = message.Content,
+                CreatedAt = message.CreatedAt
+            };
+
+            return messageDto;
         }
 
-        public async Task<IEnumerable<Message>> GetMessagesAsync(int chatRoomId, int pageNumber, int pageSize)
+        public async Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int pageNumber, int pageSize)
         {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
             var messages = await _dbContext.Messages
                  .Where(m => m.ChatRoomId == chatRoomId)
                  .OrderBy(m => m.CreatedAt)
@@ -72,7 +103,7 @@ namespace MessageService.Services
                  .Take(pageSize)
                  .ToListAsync();
 
-            var result = new List<Message>();
+            var result = new List<MessageDto>();
             foreach (var m in messages)
             {
                 var decryptionRequest = new DecryptionRequest
@@ -91,9 +122,59 @@ namespace MessageService.Services
                 {
                     m.Content = "Помилка дешифрування";
                 }
-                result.Add(m);
+
+                var messageDto = new MessageDto
+                {
+                    Id = m.Id,
+                    ChatRoomId = m.ChatRoomId,
+                    SenderUserId = m.SenderUserId,
+                    Content = m.Content,
+                    CreatedAt = m.CreatedAt
+                };
+
+                result.Add(messageDto);
             }
             return result;
+        }
+
+        public async Task<MessageDto> MarkMessageAsRead(int messageId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var message = await _dbContext.Messages.FindAsync(messageId);
+            if (message == null)
+            {
+                return new MessageDto();
+            }
+
+            var chatRoomId = message.ChatRoomId;
+            await IsAuthUserInChatRoomsAsync(chatRoomId);
+
+            message.IsRead = true;
+            message.ReadAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
+
+            var messageDto = new MessageDto
+            {
+                Id = message.Id,
+                ChatRoomId = message.ChatRoomId,
+                SenderUserId = message.SenderUserId,
+                Content = message.Content,
+                CreatedAt = message.CreatedAt
+            };
+
+            return messageDto;
+        }
+
+        private async Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId)
+        {
+            var response = await _chatClient.GetFromJsonAsync<bool>($"api/chat/get-auth-user-in-chat/{chatRoomId}");
+            return response;
         }
     }
 }

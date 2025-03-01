@@ -15,13 +15,13 @@ namespace ChatService.Services
     {
         private readonly ChatDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly HttpClient _httpClient; // Для виклику IdentityService
+        private readonly HttpClient _identityClient;
 
-        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor, HttpClient httpClient)
+        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor, IHttpClientFactory httpClientFactory)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
-            _httpClient = httpClient;
+            _identityClient = httpClientFactory.CreateClient("IdentityClient");
         }
 
         // Метод для створення групового чату
@@ -368,8 +368,33 @@ namespace ChatService.Services
         private async Task<string> GetUserDisplayNameByIdAsync(int userId)
         {
             // Приклад: використання HttpClient для виклику IdentityService
-            var response = await _httpClient.GetFromJsonAsync<UserDto>($"https://localhost:7101/api/users/search/id/{userId}");
+            var response = await _identityClient.GetFromJsonAsync<UserDto>($"api/users/search/id/{userId}");
             return response?.DisplayName ?? "Unknown";
+        }
+
+        public async Task<bool> IsAuthUserInChatRoomsByChatRoomIdAsync(int chatRoomId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chatRoom = await _context.PrivateChatRooms
+                .Where(pcr => pcr.UserChatRooms.Any(puc => puc.UserId == currentUserId))
+                .Include(cr => cr.UserChatRooms)
+                .FirstOrDefaultAsync(cr => cr.Id == chatRoomId);
+
+            var groupChatRoom = await _context.GroupChatRooms
+                .Where(gcr => gcr.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId))
+                .Include(cr => cr.GroupChatMembers)
+                .FirstOrDefaultAsync(cr => cr.Id == chatRoomId);
+
+            if (chatRoom == null && groupChatRoom == null)
+                return false;
+
+            return true;
         }
     }
 }

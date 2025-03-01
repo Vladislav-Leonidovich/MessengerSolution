@@ -1,9 +1,11 @@
 ﻿using EncryptionServiceDTOs;
 using EncryptionService.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EncryptionService.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class EncryptionController : ControllerBase

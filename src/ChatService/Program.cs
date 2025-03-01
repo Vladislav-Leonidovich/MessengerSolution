@@ -10,6 +10,8 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHttpContextAccessor();
+
 // Додайте CORS-сервіси
 builder.Services.AddCors(options =>
 {
@@ -65,6 +67,15 @@ builder.Services.AddHttpContextAccessor(); // Для доступу до HttpContext у серві
 // Реєстрація сервісу для роботи з чатами
 builder.Services.AddScoped<IChatService, ChatService.Services.ChatService>();
 builder.Services.AddScoped<IFolderService, FolderService>();
+
+builder.Services.AddHttpClient("IdentityClient", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7101/");
+})
+.AddHttpMessageHandler<InternalAuthHandler>();
+
+// Реєструємо обробник
+builder.Services.AddTransient<InternalAuthHandler>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

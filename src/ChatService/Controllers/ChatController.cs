@@ -98,5 +98,14 @@ namespace ChatService.Controllers
             var chats = await _chatService.GetGroupChatsWithoutFolderAsync();
             return Ok(chats);
         }
+
+        // GET: api/chat/get-auth-user-in-chat/{chatRoomId}
+        // Отримує список групових чатів без папки
+        [HttpGet("get-auth-user-in-chat/{chatRoomId}")]
+        public async Task<IActionResult> GetGroupChatsWithoutFolder(int chatRoomId)
+        {
+            var response = await _chatService.IsAuthUserInChatRoomsByChatRoomIdAsync(chatRoomId);
+            return Ok(response);
+        }
     }
 }
