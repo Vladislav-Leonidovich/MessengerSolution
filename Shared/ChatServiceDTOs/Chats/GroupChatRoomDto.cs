@@ -1,4 +1,6 @@
-﻿namespace ChatServiceDTOs.Chats
+﻿using MessageServiceDTOs;
+
+namespace ChatServiceDTOs.Chats
 {
     public class GroupChatRoomDto
     {
@@ -6,6 +8,7 @@
         public string Name { get; set; } = null!;
         public DateTime CreatedAt { get; set; }
         public int OwnerId { get; set; }
+        public MessageDto LastMessagePreview { get; set; } = new MessageDto();
         public IEnumerable<GroupChatMemberDto> Members { get; set; } = new List<GroupChatMemberDto>();
     }
 }

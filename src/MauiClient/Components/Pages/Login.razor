@@ -1,7 +1,8 @@
 ﻿@page "/login"
-@using MauiClient.Models.Auth
+@using IdentityService.DTOs
 @using MauiClient.Services
 @inject IAuthService AuthService
+@inject ITokenService TokenService
 @inject NavigationManager NavigationManager
 
 <h3>Вхід користувача</h3>
@@ -12,15 +13,12 @@
 <div>
     <input type="password" @bind="loginModel.Password" placeholder="Пароль" />
 </div>
-<div>
-    <button @onclick="OnLogin">Увійти</button>
-</div>
+	<button @onclick="OnLogin">Увійти</button>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
     <p style="color:red;">@errorMessage</p>
 }
-
 @code {
     // Модель для логіну
     private LoginDto loginModel = new LoginDto();
@@ -32,6 +30,7 @@
         if (!string.IsNullOrEmpty(token))
         {
             // При успішному вході можна зберегти токен і перейти на головну сторінку
+            await TokenService.SetTokenAsync(token);
             NavigationManager.NavigateTo("/");
         }
         else

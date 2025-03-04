@@ -7,6 +7,7 @@ using Shared.Contracts;
 using EncryptionServiceDTOs;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics;
 
 namespace MessageService.Services
 {
@@ -37,6 +38,10 @@ namespace MessageService.Services
             {
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
+            if (!await IsAuthUserInChatRoomsAsync(model.ChatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
 
             // Викликаємо API EncryptionService для шифрування
             var encryptionRequest = new EncryptionRequest
@@ -49,8 +54,12 @@ namespace MessageService.Services
             {
                 throw new Exception("Не вдалося зашифрувати повідомлення.");
             }
-            var encryptionResult = await encryptionResponse.Content.ReadFromJsonAsync<string>();
-            string encryptedContent = encryptionResult ?? throw new Exception("Немає зашифрованого вмісту.");
+            var encryptionResult = await encryptionResponse.Content.ReadFromJsonAsync<DecryptionRequest>();
+            if (encryptionResult == null)
+            {
+                throw new Exception("Не вдалося отримати результат шифрування.");
+            }
+            string encryptedContent = encryptionResult.CipherText ?? throw new Exception("Немає зашифрованого вмісту.");
 
             // Створюємо об'єкт повідомлення на основі даних, отриманих від клієнта
             var message = new Message
@@ -96,6 +105,11 @@ namespace MessageService.Services
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
+
             var messages = await _dbContext.Messages
                  .Where(m => m.ChatRoomId == chatRoomId)
                  .OrderBy(m => m.CreatedAt)
@@ -114,8 +128,12 @@ namespace MessageService.Services
                 var decryptionResponse = await _encryptionClient.PostAsJsonAsync("api/encryption/decrypt", decryptionRequest);
                 if (decryptionResponse.IsSuccessStatusCode)
                 {
-                    var decryptionResult = await decryptionResponse.Content.ReadFromJsonAsync<string>();
-                    string decryptedContent = decryptionResult ?? "";
+                    var decryptionResult = await decryptionResponse.Content.ReadFromJsonAsync<EncryptionRequest>();
+                    if (decryptionResult == null)
+                    {
+                        throw new Exception("Не вдалося отримати результат дешифрування.");
+                    }
+                    string decryptedContent = decryptionResult.PlainText ?? "";
                     m.Content = decryptedContent;
                 }
                 else
@@ -153,7 +171,11 @@ namespace MessageService.Services
             }
 
             var chatRoomId = message.ChatRoomId;
-            await IsAuthUserInChatRoomsAsync(chatRoomId);
+
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
 
             message.IsRead = true;
             message.ReadAt = DateTime.UtcNow;
@@ -166,6 +188,61 @@ namespace MessageService.Services
                 SenderUserId = message.SenderUserId,
                 Content = message.Content,
                 CreatedAt = message.CreatedAt
+            };
+
+            return messageDto;
+        }
+
+        public async Task<MessageDto> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
+
+            var lastMessage = await _dbContext.Messages
+                .Where(m => m.ChatRoomId == chatRoomId)
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (lastMessage == null)
+            {
+                throw new Exception("Немає повідомлень.");
+            }
+
+            var decryptionRequest = new DecryptionRequest
+            {
+                CipherText = lastMessage.Content
+            };
+
+            var decryptionResponse = await _encryptionClient.PostAsJsonAsync("api/encryption/decrypt", decryptionRequest);
+            string decryptedContent;
+            if (!decryptionResponse.IsSuccessStatusCode)
+            {
+               decryptedContent = "Помилка дешифрування";
+            }
+
+            var decryptionResult = await decryptionResponse.Content.ReadFromJsonAsync<EncryptionRequest>();
+            if (decryptionResult == null)
+            {
+                throw new Exception("Не вдалося отримати результат дешифрування.");
+            }
+            decryptedContent = decryptionResult.PlainText ?? "Немає повідомлень";
+
+            var messageDto = new MessageDto
+            {
+                Id = lastMessage.Id,
+                ChatRoomId = lastMessage.ChatRoomId,
+                SenderUserId = lastMessage.SenderUserId,
+                Content = decryptedContent,
+                CreatedAt = lastMessage.CreatedAt
             };
 
             return messageDto;

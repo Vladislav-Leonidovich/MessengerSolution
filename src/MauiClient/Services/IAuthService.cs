@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using MauiClient.Models.Auth;
+using IdentityService.DTOs;
 
 namespace MauiClient.Services
 {
@@ -12,5 +12,8 @@ namespace MauiClient.Services
     {
         Task<bool> RegisterAsync(RegisterDto model);
         Task<string?> LoginAsync(LoginDto model);
+        Task<bool> IsUserLoggedInAsync();
+        Task<bool> LogoutAsync();
+        Task<bool> RefreshTokenAsync();
     }
 }

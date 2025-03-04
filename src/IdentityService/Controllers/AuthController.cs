@@ -42,6 +42,19 @@ namespace IdentityService.Controllers
             }
             return Ok(authResponse);
         }
+
+        // POST: api/auth/refresh
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto request)
+        {
+            var authResponse = await _authService.RefreshTokenAsync(request.RefreshToken);
+            if (authResponse == null)
+            {
+                return Unauthorized(new { Message = "Invalid or expired refresh token." });
+            }
+
+            return Ok(authResponse);
+        }
     }
 }
 

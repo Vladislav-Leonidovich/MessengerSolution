@@ -17,5 +17,7 @@ namespace ChatService.Services
         Task<IEnumerable<ChatRoomDto>> GetPrivateChatsWithoutFolderAsync();
         Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsWithoutFolderAsync();
         Task<bool> IsAuthUserInChatRoomsByChatRoomIdAsync(int chatRoomId);
+        Task<bool> DeletePrivateСhatAsync(int privateChatId);
+        Task<bool> DeleteGroupСhatAsync(int privateChatId);
     }
 }

@@ -18,7 +18,7 @@ namespace ChatService.Controllers
         }
 
         // POST: api/chat/create-private
-        // Створює новий чат
+        // Створює новий приватний чат
         [HttpPost("create-private")]
         public async Task<IActionResult> CreatePrivateChat([FromBody] CreatePrivateChatRoomDto model)
         {
@@ -32,7 +32,7 @@ namespace ChatService.Controllers
         }
 
         // POST: api/chat/create-group
-        // Створює новий чат
+        // Створює новий груповий чат
         [HttpPost("create-group")]
         public async Task<IActionResult> CreateGroupChat([FromBody] CreateGroupChatRoomDto model)
         {
@@ -100,11 +100,29 @@ namespace ChatService.Controllers
         }
 
         // GET: api/chat/get-auth-user-in-chat/{chatRoomId}
-        // Отримує список групових чатів без папки
+        // Перевіряє, чи є залогінений користувач у чаті
         [HttpGet("get-auth-user-in-chat/{chatRoomId}")]
-        public async Task<IActionResult> GetGroupChatsWithoutFolder(int chatRoomId)
+        public async Task<IActionResult> IsAuthUserInChatRoomsByChatRoomId(int chatRoomId)
         {
             var response = await _chatService.IsAuthUserInChatRoomsByChatRoomIdAsync(chatRoomId);
+            return Ok(response);
+        }
+
+        // DELETE: api/chat/delete-private/{privateChatId}
+        // Видаляє приватний чат
+        [HttpDelete("delete-private/{privateChatId}")]
+        public async Task<IActionResult> DeletePrivateChat(int privateChatId)
+        {
+            var response = await _chatService.DeletePrivateСhatAsync(privateChatId);
+            return Ok(response);
+        }
+
+        // DELETE: api/chat/delete-group/{groupChatId}
+        // Видаляє груповий чат
+        [HttpDelete("delete-group/{groupChatId}")]
+        public async Task<IActionResult> DeleteGroupChat(int groupChatId)
+        {
+            var response = await _chatService.DeleteGroupСhatAsync(groupChatId);
             return Ok(response);
         }
     }

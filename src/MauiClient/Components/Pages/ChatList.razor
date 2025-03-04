@@ -1,39 +1,102 @@
 ﻿@page "/chats"
 @using MauiClient.Services
+@using MauiClient.ViewModels
 @using ChatServiceDTOs.Chats
 @inject IChatService ChatService
 @inject NavigationManager NavigationManager
+@implements IDisposable
 
 @if (chatRooms == null)
 {
-	<p>Завантаження чатів...</p>
+		<p>Завантаження чатів...</p>
 }
 else if (!chatRooms.Any())
 {
-	<p>Чати не знайдено.</p>
+		<p>Чати не знайдено.</p>
+		<button @onclick="() => ReloadChats()">Reload</button>
 }
 else
 {
-	<ul class="chat-list">
+		<ul class="chat-list">
 		@foreach (var chat in chatRooms)
 		{
-			<li>
-				@chat
-			</li>
+					<li class="chat-container">
+						<button @onclick="() => OpenChat(chat.Id)">
+							<div class="avatar-container">
+								<img src="/Images/Avatar.png" alt="Avatar" />
+							</div>
+							<div class="chat-preview-container">
+								<div class="top-container">
+                                    <div class="chat-name">
+                                        @chat.Name
+                                    </div>
+                                    <div class="chat-created-at">
+                                        @chat.FormattedLastMessageDate
+                                    </div>
+								</div>
+								<div class="bottom-container">
+                                    <div class="chat-content">
+                                        @chat.LastMessagePreview.Content
+                                    </div>
+								</div>
+							</div>
+						</button>
+					</li>
 		}
-	</ul>
+		</ul>
 }
 
 @code {
-	private IEnumerable<ChatRoomDto> chatRooms = new List<ChatRoomDto>();
+    private IEnumerable<ChatRoomViewModel> chatRooms = new List<ChatRoomViewModel>();
+    private PeriodicTimer timer;
 
-	protected override async Task OnInitializedAsync()
-	{
-		chatRooms = await ChatService.GetPrivateChatRoomsAsync();
-	}
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChatsAsync();
+        // Запускаем таймер, который будет обновлять данные каждые 5 секунд
+        /*timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        _ = UpdateChatsPeriodicallyAsync();*/
+    }
 
-	private void OpenChat(int chatId)
-	{
-		NavigationManager.NavigateTo($"/chat/{chatId}");
-	}
+    private async Task UpdateChatsPeriodicallyAsync()
+    {
+        // Пока таймер не отменён, обновляем список чатов
+        while (await timer.WaitForNextTickAsync())
+        {
+            await LoadChatsAsync();
+        }
+    }
+
+    private async Task LoadChatsAsync()
+    {
+        try
+        {
+            var chatRoomDtos = await ChatService.GetPrivateChatRoomsAsync();
+            chatRooms = chatRoomDtos.Select(chat => new ChatRoomViewModel
+                {
+                    Id = chat.Id,
+                    Name = chat.Name,
+                    LastMessagePreview = chat.LastMessagePreview
+                }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Помилка завантаження чатів: {ex.Message}");
+        }
+    }
+
+    private void OpenChat(int chatId)
+    {
+        NavigationManager.NavigateTo($"/chat/{chatId}");
+    }
+
+    private async Task ReloadChats()
+    {
+        await LoadChatsAsync();
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
 }

@@ -20,7 +20,7 @@ builder.Services.AddMassTransit(x =>
         cfg.Host("rabbitmq://localhost", h =>
         {
             h.Username("guest");
-            h.Password("guest");
+            h.Password("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");
         });
     });
 });

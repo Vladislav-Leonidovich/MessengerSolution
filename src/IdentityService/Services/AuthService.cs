@@ -72,6 +72,55 @@ namespace IdentityService.Services
             return token;
         }
 
+        public async Task<AuthDto?> RefreshTokenAsync(string currentRefreshToken)
+        {
+            // Знайдемо запис refresh токена в базі даних
+            var refreshTokenEntry = await _context.UserRefreshTokens
+                .FirstOrDefaultAsync(rt => rt.RefreshToken == currentRefreshToken);
+
+            if (refreshTokenEntry == null || refreshTokenEntry.IsExpired)
+            {
+                // Якщо токен не знайдено або він прострочений, повертаємо null або кидаємо помилку
+                return null;
+            }
+
+            // Знайдемо користувача
+            var user = await _context.Users.FindAsync(refreshTokenEntry.UserId);
+            if (user == null)
+            {
+                return null;
+            }
+
+            // Генеруємо новий JWT access token (реалізація аналогічна вашому методу CreateToken)
+            var newAccessToken = CreateToken(user); // Цей метод повертає AuthDto
+
+            // За потреби можна згенерувати новий refresh token:
+            var newRefreshToken = GenerateRefreshToken();
+
+            // Оновлюємо refresh токен у базі даних (можна видалити старий, або замінити його)
+            refreshTokenEntry.RefreshToken = newRefreshToken;
+            // Також оновлюємо дату закінчення терміну, наприклад:
+            refreshTokenEntry.ExpiresAt = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+
+            // Повертаємо нові токени
+            return new AuthDto
+            {
+                Token = newAccessToken.Token, // access token
+                ExpiresAt = newAccessToken.ExpiresAt,
+                RefreshToken = newRefreshToken
+            };
+        }
+
+        private string GenerateRefreshToken()
+        {
+            // Простий приклад генерації refresh токена:
+            var randomNumber = new byte[32];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+        }
+
         // Допоміжний метод для створення хеша пароля
         private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
@@ -90,6 +139,19 @@ namespace IdentityService.Services
                 var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
                 return computedHash.SequenceEqual(storedHash);
             }
+        }
+
+        private UserRefreshToken CreateRefreshToken(User user)
+        {
+            var refreshToken = GenerateRefreshToken();
+            var refreshTokenEntry = new UserRefreshToken
+            {
+                UserId = user.Id,
+                RefreshToken = refreshToken,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            };
+            _context.UserRefreshTokens.Add(refreshTokenEntry);
+            return refreshTokenEntry;
         }
 
         // Створення JWT токена для аутентифікованого користувача
@@ -120,11 +182,13 @@ namespace IdentityService.Services
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
+            var refreshToken = CreateRefreshToken(user);
 
             return new AuthDto
             {
                 Token = tokenHandler.WriteToken(token),
-                ExpiresAt = tokenDescriptor.Expires.Value
+                ExpiresAt = tokenDescriptor.Expires.Value,
+                RefreshToken = refreshToken.RefreshToken
             };
         }
     }

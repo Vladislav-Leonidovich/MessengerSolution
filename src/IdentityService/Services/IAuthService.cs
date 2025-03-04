@@ -8,5 +8,6 @@ namespace IdentityService.Services
         Task<bool> UserExistsAsync(string username, string email);
         Task<User> RegisterAsync(RegisterDto model);
         Task<AuthDto?> LoginAsync(LoginDto model);
+        Task<AuthDto?> RefreshTokenAsync(string currentRefreshToken);
     }
 }

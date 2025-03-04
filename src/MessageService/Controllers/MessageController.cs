@@ -40,5 +40,23 @@ namespace MessageService.Controllers
             var response = await _messageService.GetMessagesAsync(chatRoomId, pageNumber, pageSize);
             return Ok(response);
         }
+
+        // PUT: api/message/mark-as-read/{messageId}
+        // Позначає повідомлення як прочитане
+        [HttpPut("mark-as-read/{messageId}")]
+        public async Task<IActionResult> MarkMessageAsRead(int messageId)
+        {
+            var response = await _messageService.MarkMessageAsRead(messageId);
+            return Ok(response);
+        }
+
+        // GET: api/message/get-last-message/{chatRoomId}
+        // Отримує останнє повідомлення для попереднього перегляду
+        [HttpGet("get-last-message/{chatRoomId}")]
+        public async Task<IActionResult> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId)
+        {
+            var responce = await _messageService.GetLastMessagePreviewByChatRoomIdAsync(chatRoomId);
+            return Ok(responce);
+        }
     }
 }

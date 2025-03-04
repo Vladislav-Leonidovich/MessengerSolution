@@ -11,5 +11,6 @@ namespace MessageService.Services
         // Отримує список повідомлень для зазначеного чату з підтримкою пагінації
         Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int pageNumber, int pageSize);
         Task<MessageDto> MarkMessageAsRead(int messageId);
+        Task<MessageDto> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId);
     }
 }

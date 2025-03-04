@@ -74,6 +74,12 @@ builder.Services.AddHttpClient("IdentityClient", client =>
 })
 .AddHttpMessageHandler<InternalAuthHandler>();
 
+builder.Services.AddHttpClient("MessageClient", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7103/");
+})
+.AddHttpMessageHandler<InternalAuthHandler>();
+
 // –еЇструЇмо обробник
 builder.Services.AddTransient<InternalAuthHandler>();
 

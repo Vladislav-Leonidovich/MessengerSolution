@@ -17,8 +17,20 @@ namespace MauiClient
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 });
-            // Реєструємо DelegatingHandler
-            builder.Services.AddTransient<AuthenticatedHttpClientHandler>();
+
+            // Реєстрація сервісів API
+            builder.Services.AddScoped<ITokenService, SecureTokenService>();
+            builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IChatService, ChatService>();
+            builder.Services.AddScoped<IFolderService, FolderService>();
+
+            // Реєстрація AuthenticatedHttpClientHandler через фабрику
+            builder.Services.AddTransient<AuthenticatedHttpClientHandler>(sp =>
+            {
+                var authService = sp.GetRequiredService<IAuthService>();
+                var tokenService = sp.GetRequiredService<ITokenService>();
+                return new AuthenticatedHttpClientHandler(authService, tokenService);
+            });
 
             // Налаштування іменованого HttpClient через HttpClientFactory з базовою адресою та обробником
             builder.Services.AddHttpClient("ApiClient", client =>
@@ -27,13 +39,13 @@ namespace MauiClient
             })
             .AddHttpMessageHandler<AuthenticatedHttpClientHandler>();
 
+            builder.Services.AddHttpClient("RefreshTokenClient", client =>
+            {
+                client.BaseAddress = new Uri("https://localhost:7100/");
+            });
+
             // Для зручного доступу реєструємо HttpClient по замовчуванню:
             builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ApiClient"));
-            // Реєстрація сервісів API
-            builder.Services.AddScoped<ITokenService, SecureTokenService>();
-            builder.Services.AddScoped<IAuthService, AuthService>();
-            builder.Services.AddScoped<IChatService, ChatService>();
-            builder.Services.AddScoped<IFolderService, FolderService>();
 
             builder.Services.AddMauiBlazorWebView();
 
