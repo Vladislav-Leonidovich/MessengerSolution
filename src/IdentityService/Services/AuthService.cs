@@ -68,7 +68,7 @@ namespace IdentityService.Services
                 return null;
 
             // Створення JWT токена
-            var token = CreateToken(user);
+            var token = await CreateToken(user);
             return token;
         }
 
@@ -92,7 +92,7 @@ namespace IdentityService.Services
             }
 
             // Генеруємо новий JWT access token (реалізація аналогічна вашому методу CreateToken)
-            var newAccessToken = CreateToken(user); // Цей метод повертає AuthDto
+            var newAccessToken = await CreateToken(user); // Цей метод повертає AuthDto
 
             // За потреби можна згенерувати новий refresh token:
             var newRefreshToken = GenerateRefreshToken();
@@ -107,8 +107,9 @@ namespace IdentityService.Services
             return new AuthDto
             {
                 Token = newAccessToken.Token, // access token
-                ExpiresAt = newAccessToken.ExpiresAt,
-                RefreshToken = newRefreshToken
+                TokenExpiresAt = newAccessToken.TokenExpiresAt,
+                RefreshToken = refreshTokenEntry.RefreshToken,
+                RefreshTokenExpiresAt = refreshTokenEntry.ExpiresAt
             };
         }
 
@@ -141,21 +142,38 @@ namespace IdentityService.Services
             }
         }
 
-        private UserRefreshToken CreateRefreshToken(User user)
+        private async Task<UserRefreshToken> CreateRefreshToken(User user)
         {
-            var refreshToken = GenerateRefreshToken();
-            var refreshTokenEntry = new UserRefreshToken
+            if (user == null)
+            {
+                return new UserRefreshToken();
+            }
+
+            var existingToken = await _context.UserRefreshTokens
+        .FirstOrDefaultAsync(r => r.UserId == user.Id);
+
+
+            var newRefreshToken = GenerateRefreshToken();
+            var newExpiration = DateTime.UtcNow.AddDays(7);
+            if (existingToken != null)
+            {
+                _context.UserRefreshTokens.Remove(existingToken);
+            }
+
+            existingToken = new UserRefreshToken
             {
                 UserId = user.Id,
-                RefreshToken = refreshToken,
-                ExpiresAt = DateTime.UtcNow.AddDays(7)
+                RefreshToken = newRefreshToken,
+                ExpiresAt = newExpiration
             };
-            _context.UserRefreshTokens.Add(refreshTokenEntry);
-            return refreshTokenEntry;
+            await _context.UserRefreshTokens.AddAsync(existingToken);
+
+            await _context.SaveChangesAsync();
+            return existingToken; ;
         }
 
         // Створення JWT токена для аутентифікованого користувача
-        private AuthDto CreateToken(User user)
+        private async Task<AuthDto> CreateToken(User user)
         {
             var jwtSecretKey = _configuration["JWT_SECRET_KEY"];
             if (string.IsNullOrEmpty(jwtSecretKey))
@@ -182,13 +200,14 @@ namespace IdentityService.Services
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            var refreshToken = CreateRefreshToken(user);
+            var refreshToken = await CreateRefreshToken(user);
 
             return new AuthDto
             {
                 Token = tokenHandler.WriteToken(token),
-                ExpiresAt = tokenDescriptor.Expires.Value,
-                RefreshToken = refreshToken.RefreshToken
+                TokenExpiresAt = tokenDescriptor.Expires.Value,
+                RefreshToken = refreshToken.RefreshToken,
+                RefreshTokenExpiresAt = refreshToken.ExpiresAt
             };
         }
     }

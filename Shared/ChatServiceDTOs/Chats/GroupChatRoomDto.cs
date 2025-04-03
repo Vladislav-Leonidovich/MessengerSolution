@@ -10,5 +10,6 @@ namespace ChatServiceDTOs.Chats
         public int OwnerId { get; set; }
         public MessageDto LastMessagePreview { get; set; } = new MessageDto();
         public IEnumerable<GroupChatMemberDto> Members { get; set; } = new List<GroupChatMemberDto>();
+        public ChatRoomType ChatRoomType { get; set; }
     }
 }

@@ -11,8 +11,9 @@ namespace MauiClient.Services
         Task SetTokenAsync(string token);
         Task<string?> GetTokenAsync();
         Task RemoveTokenAsync();
-        Task SetRefreshTokenAsync(string refreshToken);
+        Task SetRefreshTokenAsync(string refreshToken, DateTime expiration);
         Task<string?> GetRefreshTokenAsync();
+        Task<DateTime?> GetRefreshTokenExpirationAsync();
         Task RemoveRefreshTokenAsync();
     }
 }

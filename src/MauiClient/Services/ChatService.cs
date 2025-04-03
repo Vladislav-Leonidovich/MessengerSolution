@@ -73,5 +73,29 @@ namespace MauiClient.Services
             var response = await _httpClient.GetFromJsonAsync<IEnumerable<GroupChatRoomDto>>("api/chat/group");
             return response ?? new List<GroupChatRoomDto>();
         }
+
+        public async Task<ChatRoomDto> GetPrivateChatRoomAsync(int chatId)
+        {
+            var response = await _httpClient.GetFromJsonAsync<ChatRoomDto>($"api/chat/private/{chatId}");
+            return response ?? new ChatRoomDto();
+        }
+
+        public async Task<GroupChatRoomDto> GetGroupChatRoomAsync(int chatId)
+        {
+            var response = await _httpClient.GetFromJsonAsync<GroupChatRoomDto>($"api/chat/group/{chatId}");
+            return response ?? new GroupChatRoomDto();
+        }
+
+        public async Task<bool> DeletePrivateChatRoomAsync(int chatId)
+        {
+            var response = await _httpClient.DeleteAsync($"api/chat/delete-private/{chatId}");
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<bool> DeleteGroupChatRoomAsync(int chatId)
+        {
+            var response = await _httpClient.DeleteAsync($"api/chat/delete-group/{chatId}");
+            return response.IsSuccessStatusCode;
+        }
     }
 }

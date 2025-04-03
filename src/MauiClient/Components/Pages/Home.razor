@@ -1,11 +1,30 @@
 ﻿@page "/"
+@attribute [Authorize]
 
 <div class="chats-container">
 	<div class="nav-folders"></div>
 	<div class="chats-wrapper">
 		<div class="nav-chats">
-			<ChatList />
+			<ChatList OnChatSelected="HandleChatSelected"/>
 		</div>
-		<div class="chat-container"></div>
+			@if (SelectedChatId.HasValue)
+			{
+				<ChatRoom ChatRoomId="@SelectedChatId.Value"/>
+			}
+			else
+			{
+			<div class="chat-not-selected-container">
+				<p class="functional-text">Оберіть чат</p>
+			</div>
+			}
 	</div>
 </div>
+
+@code {
+	private int? SelectedChatId;
+
+	private void HandleChatSelected(int chatId)
+	{
+		SelectedChatId = chatId;
+	}
+}

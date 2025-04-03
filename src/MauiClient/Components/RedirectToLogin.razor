@@ -1,0 +1,14 @@
+﻿@page "/redirect"
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@using MauiClient.Components.Layout
+@layout NoLayout
+
+<h3>Переходимо на сторінку логіну...</h3>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/login");
+    }
+}

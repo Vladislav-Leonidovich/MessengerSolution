@@ -10,6 +10,8 @@ using System.Net.Http;
 using Shared.IdentityServiceDTOs;
 using MessageServiceDTOs;
 using System;
+using MassTransit;
+using Shared.Contracts;
 
 namespace ChatService.Services
 {
@@ -19,13 +21,15 @@ namespace ChatService.Services
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly HttpClient _identityClient;
         private readonly HttpClient _messageClient;
+        private readonly IBus _bus;
 
-        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor, IHttpClientFactory httpClientFactory)
+        public ChatService(ChatDbContext context, IHttpContextAccessor httpContextAccessor, IHttpClientFactory httpClientFactory, IBus bus)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
             _identityClient = httpClientFactory.CreateClient("IdentityClient");
             _messageClient = httpClientFactory.CreateClient("MessageClient");
+            _bus = bus;
         }
 
         // Метод для створення групового чату
@@ -43,6 +47,7 @@ namespace ChatService.Services
             {
                 Name = model.Name,
                 OwnerId = currentUserId,
+                ChatRoomType = ChatRoomType.groupChat,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -76,7 +81,9 @@ namespace ChatService.Services
                 Name = groupChat.Name,
                 CreatedAt = groupChat.CreatedAt,
                 OwnerId = groupChat.OwnerId,
+                ChatRoomType = ChatRoomType.groupChat,
                 LastMessagePreview = lastMessagePreview,
+                
                 Members = groupChat.GroupChatMembers.Select(gm => new GroupChatMemberDto
                 {
                     UserId = gm.UserId,
@@ -100,6 +107,7 @@ namespace ChatService.Services
             // Створення нового об'єкту чату з назвою та поточною датою
             var privateChatRoom = new PrivateChatRoom
             {
+                ChatRoomType = ChatRoomType.privateChat,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -130,6 +138,7 @@ namespace ChatService.Services
                 CreatedAt = privateChatRoom.CreatedAt,
                 Name = partnerDisplayName,
                 LastMessagePreview = lastMessagePreview,
+                ChatRoomType = ChatRoomType.privateChat,
                 ParticipantIds = privateChatRoom.UserChatRooms.Select(uc => uc.UserId).ToList()
             };
 
@@ -151,10 +160,13 @@ namespace ChatService.Services
 
             _context.PrivateChatRooms.Remove(chat);
             await _context.SaveChangesAsync();
+
+            var message = new ChatDeletedEvent { ChatRoomId = chat.Id };
+            await _bus.Publish(message);
             return true;
         }
 
-        public async Task<bool> DeleteGroupСhatAsync(int privateChatId)
+        public async Task<bool> DeleteGroupСhatAsync(int groupChatId)
         {
             // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
@@ -163,7 +175,7 @@ namespace ChatService.Services
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
 
-            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(c => c.Id == privateChatId && (c.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId)));
+            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(c => c.Id == groupChatId && (c.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId)));
 
             if (chat == null)
                 return false;
@@ -173,6 +185,9 @@ namespace ChatService.Services
 
             _context.GroupChatRooms.Remove(chat);
             await _context.SaveChangesAsync();
+
+            var message = new ChatDeletedEvent { ChatRoomId = chat.Id };
+            await _bus.Publish(message);
             return true;
         }
 
@@ -212,6 +227,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = partnerDisplayName,
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = chat.ChatRoomType,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -224,6 +240,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = "Приватний чат",
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = ChatRoomType.groupChat,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -260,6 +277,7 @@ namespace ChatService.Services
                     CreatedAt = groupChat.CreatedAt,
                     OwnerId = groupChat.OwnerId,
                     LastMessagePreview = lastMessagePreview,
+                    ChatRoomType = groupChat.ChatRoomType,
                     Members = groupChat.GroupChatMembers.Select(gm => new GroupChatMemberDto
                     {
                         UserId = gm.UserId,
@@ -305,6 +323,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = partnerDisplayName,
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = chat.ChatRoomType,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -317,6 +336,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = "Приватний чат",
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = ChatRoomType.groupChat,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -342,6 +362,7 @@ namespace ChatService.Services
                 Name = gr.Name,
                 CreatedAt = gr.CreatedAt,
                 OwnerId = gr.OwnerId,
+                ChatRoomType = gr.ChatRoomType,
                 Members = gr.GroupChatMembers.Select(gm => new GroupChatMemberDto
                 {
                     UserId = gm.UserId,
@@ -386,6 +407,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = partnerDisplayName,
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = chat.ChatRoomType,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -398,6 +420,7 @@ namespace ChatService.Services
                         CreatedAt = chat.CreatedAt,
                         Name = "Private chat",
                         LastMessagePreview = lastMessagePreview,
+                        ChatRoomType = ChatRoomType.groupChat,
                         ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId)
                     });
                 }
@@ -433,6 +456,7 @@ namespace ChatService.Services
                     CreatedAt = groupChat.CreatedAt,
                     OwnerId = groupChat.OwnerId,
                     LastMessagePreview = lastMessagePreview,
+                    ChatRoomType = groupChat.ChatRoomType,
                     Members = groupChat.GroupChatMembers.Select(gm => new GroupChatMemberDto
                     {
                         UserId = gm.UserId,
@@ -442,6 +466,82 @@ namespace ChatService.Services
             }
 
             return groupChatDtos;
+        }
+
+        public async Task<ChatRoomDto> GetPrivateChatByIdAsync(int chatRoomId)
+        {
+            // Отримуємо поточний userId із токену
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.PrivateChatRooms
+                .Include(pcr => pcr.UserChatRooms)
+                .FirstOrDefaultAsync(pcr => pcr.Id == chatRoomId);
+
+            if (chat == null)
+                return new ChatRoomDto();
+
+            if (!chat.UserChatRooms.Any(uc => uc.UserId == currentUserId))
+                return new ChatRoomDto();
+
+            int? partnerId = chat.UserChatRooms.FirstOrDefault(uc => uc.UserId != currentUserId)?.UserId;
+            string partnerDisplayName = partnerId.HasValue
+                ? await GetUserDisplayNameByIdAsync(partnerId.Value)
+                : "Unknown";
+
+            var lastMessagePreview = await GetLastMessagePreviewByChatRoomIdAsync(chat.Id);
+
+            var dto = new ChatRoomDto
+            {
+                Id = chat.Id,
+                CreatedAt = chat.CreatedAt,
+                Name = partnerDisplayName,
+                LastMessagePreview = lastMessagePreview,
+                ChatRoomType = chat.ChatRoomType,
+                ParticipantIds = chat.UserChatRooms.Select(uc => uc.UserId).ToList()
+            };
+            return dto;
+        }
+
+        public async Task<GroupChatRoomDto> GetGroupChatByIdAsync(int chatRoomId)
+        {
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+
+            var chat = await _context.GroupChatRooms
+                .Include(gcr => gcr.GroupChatMembers)
+                .FirstOrDefaultAsync(gcr => gcr.Id == chatRoomId);
+
+            if (chat == null)
+                return new GroupChatRoomDto();
+
+            if (!chat.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId))
+            {
+                throw new UnauthorizedAccessException("Користувач не приймає участь в цьому чаті.");
+            }
+
+            var lastMessagePreview = await GetLastMessagePreviewByChatRoomIdAsync(chat.Id);
+            var dto = new GroupChatRoomDto
+            {
+                Id = chat.Id,
+                Name = chat.Name,
+                CreatedAt = chat.CreatedAt,
+                OwnerId = chat.OwnerId,
+                LastMessagePreview = lastMessagePreview,
+                ChatRoomType = chat.ChatRoomType,
+                Members = chat.GroupChatMembers.Select(gm => new GroupChatMemberDto
+                {
+                    UserId = gm.UserId,
+                    Role = gm.Role
+                }).ToList()
+            };
+            return dto;
         }
 
         // Метод для отримання LastMessagePreview через MessageService

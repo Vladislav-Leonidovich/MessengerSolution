@@ -25,5 +25,13 @@ namespace MauiClient.Services
         Task<IEnumerable<ChatRoomDto>> GetPrivateChatRoomsAsync();
 
         Task<IEnumerable<GroupChatRoomDto>> GetGroupChatRoomsAsync();
+
+        Task<ChatRoomDto> GetPrivateChatRoomAsync(int chatId);
+
+        Task<GroupChatRoomDto> GetGroupChatRoomAsync(int chatId);
+
+        Task<bool> DeletePrivateChatRoomAsync(int chatId);
+
+        Task<bool> DeleteGroupChatRoomAsync(int chatId);
     }
 }

@@ -1,23 +1,14 @@
-﻿@using MauiClient.Services
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
+@using MauiClient.Services
 @inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-
-<div class="page">
-	<main>
+	<div class="page">
+		<main>
 		@Body
-	</main>
-	<NavMenu />
-</div>
+		</main>
+		<NavMenu />
+	</div>
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-        // Перевірка, чи користувач авторизований
-        var isLoggedIn = await AuthService.IsUserLoggedInAsync();
-        if (!isLoggedIn)
-        {
-            NavigationManager.NavigateTo("/login");
-        }
-    }
+
 }

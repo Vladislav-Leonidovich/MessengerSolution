@@ -1,4 +1,6 @@
-﻿namespace ChatService.Models
+﻿using MessageServiceDTOs;
+
+namespace ChatService.Models
 {
     // Абстрактний базовий клас для чатів
     public abstract class ChatRoom
@@ -8,5 +10,6 @@
         // Загальний зв’язок із папкою, якщо чат відноситься до неї
         public int? FolderId { get; set; }
         public Folder? Folder { get; set; }
+        public ChatRoomType ChatRoomType { get; set; }
     }
 }

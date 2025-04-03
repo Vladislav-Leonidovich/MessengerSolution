@@ -39,9 +39,7 @@ namespace ChatService.Migrations
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     FolderId = table.Column<int>(type: "int", nullable: true),
-                    ChatRoomType = table.Column<string>(type: "varchar(8)", maxLength: 8, nullable: false),
-                    Name = table.Column<string>(type: "longtext", nullable: true),
-                    OwnerId = table.Column<int>(type: "int", nullable: true)
+                    ChatRoomType = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -52,6 +50,44 @@ namespace ChatService.Migrations
                         principalTable: "Folders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "GroupChatRooms",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "longtext", nullable: false),
+                    OwnerId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GroupChatRooms", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_GroupChatRooms_ChatRooms_Id",
+                        column: x => x.Id,
+                        principalTable: "ChatRooms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "PrivateChatRooms",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PrivateChatRooms", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_PrivateChatRooms_ChatRooms_Id",
+                        column: x => x.Id,
+                        principalTable: "ChatRooms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
@@ -67,9 +103,9 @@ namespace ChatService.Migrations
                 {
                     table.PrimaryKey("PK_GroupChatMembers", x => new { x.GroupChatRoomId, x.UserId });
                     table.ForeignKey(
-                        name: "FK_GroupChatMembers_ChatRooms_GroupChatRoomId",
+                        name: "FK_GroupChatMembers_GroupChatRooms_GroupChatRoomId",
                         column: x => x.GroupChatRoomId,
-                        principalTable: "ChatRooms",
+                        principalTable: "GroupChatRooms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
@@ -86,9 +122,9 @@ namespace ChatService.Migrations
                 {
                     table.PrimaryKey("PK_UserChatRooms", x => new { x.PrivateChatRoomId, x.UserId });
                     table.ForeignKey(
-                        name: "FK_UserChatRooms_ChatRooms_PrivateChatRoomId",
+                        name: "FK_UserChatRooms_PrivateChatRooms_PrivateChatRoomId",
                         column: x => x.PrivateChatRoomId,
-                        principalTable: "ChatRooms",
+                        principalTable: "PrivateChatRooms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
@@ -113,6 +149,12 @@ namespace ChatService.Migrations
 
             migrationBuilder.DropTable(
                 name: "UserChatRooms");
+
+            migrationBuilder.DropTable(
+                name: "GroupChatRooms");
+
+            migrationBuilder.DropTable(
+                name: "PrivateChatRooms");
 
             migrationBuilder.DropTable(
                 name: "ChatRooms");

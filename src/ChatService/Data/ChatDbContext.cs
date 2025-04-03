@@ -21,11 +21,8 @@ namespace ChatService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Налаштування TPH для ChatRoom із дискрімінацією
-            modelBuilder.Entity<ChatRoom>()
-                .HasDiscriminator<string>("ChatRoomType")
-                .HasValue<PrivateChatRoom>("Private")
-                .HasValue<GroupChatRoom>("Group");
+            modelBuilder.Entity<PrivateChatRoom>().ToTable("PrivateChatRooms");
+            modelBuilder.Entity<GroupChatRoom>().ToTable("GroupChatRooms");
 
             // Складовий ключ для приватного чату
             modelBuilder.Entity<UserChatRoom>()

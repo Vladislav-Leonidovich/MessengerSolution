@@ -1,6 +1,7 @@
 ﻿@using MauiClient.Services
 @using ChatServiceDTOs.Folders
 @inject IFolderService FolderService
+@attribute [Authorize]
 
 <ul>
     @if (folders is not null)

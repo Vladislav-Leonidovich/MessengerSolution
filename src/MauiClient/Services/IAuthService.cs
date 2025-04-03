@@ -12,8 +12,6 @@ namespace MauiClient.Services
     {
         Task<bool> RegisterAsync(RegisterDto model);
         Task<string?> LoginAsync(LoginDto model);
-        Task<bool> IsUserLoggedInAsync();
-        Task<bool> LogoutAsync();
-        Task<bool> RefreshTokenAsync();
+        Task LogoutAsync();
     }
 }

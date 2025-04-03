@@ -114,7 +114,14 @@ namespace ChatService.Controllers
         public async Task<IActionResult> DeletePrivateChat(int privateChatId)
         {
             var response = await _chatService.DeletePrivateСhatAsync(privateChatId);
-            return Ok(response);
+            if(response)
+            {
+                return Ok(response);
+            }
+            else
+            {
+                return BadRequest(new { Message = "Не вдалося видалити приватний чат." });
+            }
         }
 
         // DELETE: api/chat/delete-group/{groupChatId}
@@ -123,7 +130,46 @@ namespace ChatService.Controllers
         public async Task<IActionResult> DeleteGroupChat(int groupChatId)
         {
             var response = await _chatService.DeleteGroupСhatAsync(groupChatId);
-            return Ok(response);
+            if (response)
+            {
+                return Ok(response);
+            }
+            else
+            {
+                return BadRequest(new { Message = "Не вдалося видалити груповий чат." });
+            }
+        }
+
+        // GET: api/chat/private/{chatRoomId}
+        // Отримує приватний чат за його ідентифікатором
+        [HttpGet("private/{chatRoomId}")]
+        public async Task<IActionResult> GetPrivateChatById(int chatRoomId)
+        {
+            try
+            {
+                var chat = await _chatService.GetPrivateChatByIdAsync(chatRoomId);
+                return Ok(chat);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        // GET: api/chat/group/{chatRoomId}
+        // Отримує груповий чат за його ідентифікатором
+        [HttpGet("group/{chatRoomId}")]
+        public async Task<IActionResult> GetGroupChatById(int chatRoomId)
+        {
+            try
+            {
+                var chat = await _chatService.GetGroupChatByIdAsync(chatRoomId);
+                return Ok(chat);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
         }
     }
 }

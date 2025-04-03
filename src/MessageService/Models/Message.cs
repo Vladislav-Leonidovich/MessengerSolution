@@ -1,4 +1,6 @@
-﻿namespace MessageService.Models
+﻿using MessageServiceDTOs;
+
+namespace MessageService.Models
 {
     public class Message
     {
@@ -6,6 +8,8 @@
 
         // Ідентифікатор чату (особистого або групового)
         public int ChatRoomId { get; set; }
+
+        public ChatRoomType ChatRoomType { get; set; }
 
         // Ідентифікатор користувача-відправника
         public int SenderUserId { get; set; }

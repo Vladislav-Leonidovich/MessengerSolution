@@ -1,29 +1,184 @@
 ﻿@page "/chat/{ChatRoomId:int}"
 @using MauiClient.Services
 @using ChatServiceDTOs.Chats
+@using MessageServiceDTOs
 @inject IChatService ChatService
+@inject IMessageService MessageService
+@inject IJSRuntime JSRuntime
+@attribute [Authorize]
 
-<h3>Чат: @ChatRoomName</h3>
 
-@if (chatRoom == null)
+
+@if (!string.IsNullOrEmpty(ChatRoomEmptyMessage))
 {
-    <p>Завантаження даних чату...</p>
+	<p>@ChatRoomEmptyMessage</p>
+}
+else if (chatRoom == null)
+{
+	<p>Завантаження даних чату...</p>
+	<p>@ChatRoomEmptyMessage</p>
 }
 else
 {
-    <!-- Можна додати форму для надсилання повідомлень -->
+	<div class="chat-container">
+		<div class="chat-header">
+			<div class="left-box">
+				<div class="header-text ">@chatRoom.Name</div>
+				<div class="functional-text">Was online - 12:55</div>
+			</div>
+			<div class="right-box">
+				<button class="custom-button"><img src="/Images/Search2.svg" alt="Search" /></button>
+				<button class="custom-button"><img src="/Images/moreicon.svg" alt="More Options" /></button>
+			</div>
+		</div>
+		<div class="chat-messages custom-scroll">
+			<Virtualize TItem="MessageDto" ItemsProvider="LoadMessages" Context="message" ItemSize="50">
+				<div class="message-item">
+					<p class="default-text">@message.Content</p>
+					<p class="created-at functional-text">@message.CreatedAt.ToString("HH:mm")</p>
+				</div>
+			</Virtualize>
+		</div>
+		<div class="chat-input">
+			<div class="bottom-chat-container">
+				<button class="custom-button"><img class="chat-icon" src="/Images/plus.svg" alt="Add" /></button>
+				<textarea class="auto-resize" @bind="Text"
+				oninput="
+					  let minHeight=35;
+					  let maxHeight=150;
+					  this.style.height='35px' ;
+					  if (this.scrollHeight <= minHeight) {
+				      // Якщо текст замалий — встановити мінімум
+				      this.style.height = minHeight + 'px';
+				      this.style.overflowY = 'hidden';
+				  } else if (this.scrollHeight <= maxHeight) {
+				      // Якщо містимося між 45 і 150
+				      this.style.height = this.scrollHeight + 'px';
+				      this.style.overflowY = 'hidden';
+				  } else {
+				      // Якщо більше 150 — залишити 150 і вмикнути скрол
+				      this.style.height = maxHeight + 'px';
+				      this.style.overflowY = 'auto';
+				  }
+				"
+				placeholder="Type text...">
+				</textarea>
+				<button class="custom-button" @onclick="SendMessage"><img class="chat-icon" src="/Images/sendicon.svg" alt="Send" /></button>
+			</div>
+		</div>
+	</div>
 }
 
 @code {
-    [Parameter]
-    public int ChatRoomId { get; set; }
+	[Parameter]
+	public int ChatRoomId { get; set; }
 
-    private ChatRoomDto? chatRoom;
-    private string ChatRoomName = string.Empty;
+	private List<MessageDto> newMessages = new();
+	private int serverTotalMessages = 0;
+	public string ChatRoomEmptyMessage { get; set; } = string.Empty;
+	private int totalMessages = 0;
+	private string Text { get; set; } = string.Empty;
+	private ChatRoomDto? chatRoom;
 
-    protected override async Task OnInitializedAsync()
-    {
-        var chats = await ChatService.GetPrivateChatRoomsAsync();
-        chatRoom = chats.FirstOrDefault(c => c.Id == ChatRoomId);
-    }
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			chatRoom = await ChatService.GetPrivateChatRoomAsync(ChatRoomId);
+
+			if (chatRoom == null)
+			{
+				ChatRoomEmptyMessage = "Чат не знайдено.";
+				return;
+			}
+
+			await StartSignalR();
+
+			// 2. Підписуємось на оновлення
+			MessageService.OnNewMessageReceived += OnNewMessageReceived;
+
+			// 3. Завантажуємо кількість повідомлень
+			serverTotalMessages = (int)await MessageService.GetMessagesCountByChatRoomIdAsync(chatRoom.Id);
+		}
+		catch (Exception ex)
+		{
+			ChatRoomEmptyMessage = $"Помилка завантаження чату. Код помилки: {ex.Message}";
+		}
+
+	}
+
+	/*protected override async Task OnParametersSetAsync()
+	{
+		if (ChatRoomId != prevChatRoomId)
+		{
+			await LoadChatData();
+		}
+	}*/
+
+	private async Task StartSignalR()
+	{
+		try
+		{
+			await MessageService.StartConnectionAsync();
+		}
+		catch
+		{
+			// Спробувати перепідключитися через 5 сек
+			await Task.Delay(5000);
+			await StartSignalR();
+		}
+	}
+
+	private void OnNewMessageReceived(MessageDto newMessage)
+	{
+		// Додаємо нове повідомлення до списку
+		newMessages.Insert(0, newMessage); // Вставляємо на початок, якщо нові повідомлення з'являються на верху
+		StateHasChanged(); // Оновлюємо інтерфейс
+	}
+
+	private async Task SendMessage()
+	{
+		if (string.IsNullOrWhiteSpace(Text))
+		{
+			return;
+		}
+		if (chatRoom == null)
+		{
+			return;
+		}
+		var message = new SendMessageDto
+			{
+				ChatRoomId = chatRoom.Id,
+				ChatRoomType = chatRoom.ChatRoomType,
+				Content = Text
+			};
+		await MessageService.SendMessageAsync(message);
+		Text = string.Empty;
+	}
+
+	private async ValueTask<ItemsProviderResult<MessageDto>> LoadMessages(ItemsProviderRequest request)
+	{
+		if (chatRoom == null)
+		{
+			return new ItemsProviderResult<MessageDto>(new List<MessageDto>(), 0);
+		}
+
+		// Загальна кількість = серверні + локальні нові
+		int totalCount = serverTotalMessages + newMessages.Count;
+
+		// Якщо запит стосується нових повідомлень
+		if (request.StartIndex < newMessages.Count)
+		{
+			int count = Math.Min(request.Count, newMessages.Count - request.StartIndex);
+			var items = newMessages.Skip(request.StartIndex).Take(count).ToList();
+			return new ItemsProviderResult<MessageDto>(items, totalCount);
+		}
+		else
+		{
+			// Завантажуємо історичні повідомлення з сервера
+			int serverStart = request.StartIndex - newMessages.Count;
+			var serverMessages = await MessageService.GetMessagesAsync(chatRoom.Id, serverStart, request.Count);
+			return new ItemsProviderResult<MessageDto>(serverMessages, totalCount);
+		}
+	}
 }

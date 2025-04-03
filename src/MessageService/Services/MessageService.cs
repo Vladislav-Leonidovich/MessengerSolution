@@ -14,16 +14,16 @@ namespace MessageService.Services
     public class MessageService : IMessageService
     {
         private readonly MessageDbContext _dbContext;
-        private readonly IPublishEndpoint _publishEndpoint;
+        private readonly IBus _bus;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly HttpClient _chatClient;
         private readonly HttpClient _encryptionClient;
         private readonly HttpClient _identityClient;
 
-        public MessageService(MessageDbContext dbContext, IPublishEndpoint publishEndpoint, IHttpClientFactory httpClientFactory, IHttpContextAccessor httpContextAccessor)
+        public MessageService(MessageDbContext dbContext, IPublishEndpoint publishEndpoint, IHttpClientFactory httpClientFactory, IHttpContextAccessor httpContextAccessor, IBus bus)
         {
             _dbContext = dbContext;
-            _publishEndpoint = publishEndpoint;
+            _bus = bus;
             _chatClient = httpClientFactory.CreateClient("ChatClient");
             _encryptionClient = httpClientFactory.CreateClient("EncryptionClient");
             _identityClient = httpClientFactory.CreateClient("IdentityClient");
@@ -65,6 +65,7 @@ namespace MessageService.Services
             var message = new Message
             {
                 ChatRoomId = model.ChatRoomId,
+                ChatRoomType = model.ChatRoomType,
                 SenderUserId = currentUserId,
                 Content = encryptedContent,
                 CreatedAt = DateTime.UtcNow
@@ -75,28 +76,40 @@ namespace MessageService.Services
             await _dbContext.SaveChangesAsync();
 
             // Публікуємо подію MessageCreatedEvent
-            await _publishEndpoint.Publish(new MessageCreatedEvent
+            var eventMessage = new MessageCreatedEvent
             {
-                MessageId = message.Id,
+                Id = message.Id,
                 ChatRoomId = message.ChatRoomId,
+                ChatRoomType = message.ChatRoomType,
                 SenderUserId = message.SenderUserId,
                 Content = message.Content,
-                CreatedAt = message.CreatedAt
-            });
+                IsRead = message.IsRead,
+                ReadAt = message.ReadAt,
+                CreatedAt = message.CreatedAt,
+                IsEdited = message.IsEdited,
+                EditedAt = message.EditedAt
+            };
+
+            await _bus.Publish(eventMessage);
 
             var messageDto = new MessageDto
             {
                 Id = message.Id,
                 ChatRoomId = message.ChatRoomId,
+                ChatRoomType = message.ChatRoomType,
                 SenderUserId = message.SenderUserId,
                 Content = message.Content,
-                CreatedAt = message.CreatedAt
+                IsRead = message.IsRead,
+                ReadAt = message.ReadAt,
+                CreatedAt = message.CreatedAt,
+                IsEdited = message.IsEdited,
+                EditedAt = message.EditedAt
             };
 
             return messageDto;
         }
 
-        public async Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int pageNumber, int pageSize)
+        public async Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int startIndex, int count)
         {
             // Отримуємо поточний userId із токену
             var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
@@ -113,11 +126,12 @@ namespace MessageService.Services
             var messages = await _dbContext.Messages
                  .Where(m => m.ChatRoomId == chatRoomId)
                  .OrderBy(m => m.CreatedAt)
-                 .Skip((pageNumber - 1) * pageSize)
-                 .Take(pageSize)
+                 .Skip(startIndex)
+                 .Take(count)
                  .ToListAsync();
 
             var result = new List<MessageDto>();
+
             foreach (var m in messages)
             {
                 var decryptionRequest = new DecryptionRequest
@@ -145,6 +159,7 @@ namespace MessageService.Services
                 {
                     Id = m.Id,
                     ChatRoomId = m.ChatRoomId,
+                    ChatRoomType = m.ChatRoomType,
                     SenderUserId = m.SenderUserId,
                     Content = m.Content,
                     CreatedAt = m.CreatedAt
@@ -153,6 +168,18 @@ namespace MessageService.Services
                 result.Add(messageDto);
             }
             return result;
+        }
+
+        public async Task<ulong> GetMessagesCountByChatRoomIdAsync(int chatRoomId)
+        {
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
+
+            var totalCount = await _dbContext.Messages.Where(m => m.ChatRoomId == chatRoomId).CountAsync();
+
+            return (ulong)totalCount;
         }
 
         public async Task<MessageDto> MarkMessageAsRead(int messageId)
@@ -185,6 +212,7 @@ namespace MessageService.Services
             {
                 Id = message.Id,
                 ChatRoomId = message.ChatRoomId,
+                ChatRoomType = message.ChatRoomType,
                 SenderUserId = message.SenderUserId,
                 Content = message.Content,
                 CreatedAt = message.CreatedAt
@@ -214,7 +242,7 @@ namespace MessageService.Services
 
             if (lastMessage == null)
             {
-                throw new Exception("Немає повідомлень.");
+                return new MessageDto();
             }
 
             var decryptionRequest = new DecryptionRequest
@@ -240,6 +268,7 @@ namespace MessageService.Services
             {
                 Id = lastMessage.Id,
                 ChatRoomId = lastMessage.ChatRoomId,
+                ChatRoomType = lastMessage.ChatRoomType,
                 SenderUserId = lastMessage.SenderUserId,
                 Content = decryptedContent,
                 CreatedAt = lastMessage.CreatedAt
@@ -248,7 +277,40 @@ namespace MessageService.Services
             return messageDto;
         }
 
-        private async Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId)
+        public async Task<bool> DeleteMessageAsync(int messageId)
+        {
+            var message = await _dbContext.Messages.FindAsync(messageId);
+            if (message == null)
+            {
+                return false;
+            }
+            var chatRoomId = message.ChatRoomId;
+
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
+            _dbContext.Messages.Remove(message);
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteMessagesByChatRoomIdAsync(int chatRoomId)
+        {
+            if (!await IsAuthUserInChatRoomsAsync(chatRoomId))
+            {
+                throw new UnauthorizedAccessException("Користувач не має доступу до цього чату.");
+            }
+            var messages = await _dbContext.Messages
+                .Where(m => m.ChatRoomId == chatRoomId)
+                .ToListAsync();
+
+            _dbContext.Messages.RemoveRange(messages);
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId)
         {
             var response = await _chatClient.GetFromJsonAsync<bool>($"api/chat/get-auth-user-in-chat/{chatRoomId}");
             return response;

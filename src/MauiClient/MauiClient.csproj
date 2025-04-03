@@ -59,11 +59,16 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.13" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.13" />
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
+        <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.13" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+        <PackageReference Include="Microsoft.JSInterop" Version="8.0.13" />
         <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="8.0.83" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+        <PackageReference Include="Microsoft.Net.Http.Headers" Version="8.0.13" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.0" />
     </ItemGroup>
 
@@ -87,6 +92,30 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Resources\Localization\Common.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Common.resx</DependentUpon>
+      </Compile>
+      <Compile Update="Resources\Localization\LoginPage.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>LoginPage.resx</DependentUpon>
+      </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Update="Resources\Localization\Common.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Common.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+      <EmbeddedResource Update="Resources\Localization\LoginPage.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>LoginPage.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
     </ItemGroup>
 
 </Project>

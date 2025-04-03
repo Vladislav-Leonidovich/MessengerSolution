@@ -28,6 +28,9 @@ namespace MessageService.Migrations
                     b.Property<int>("ChatRoomId")
                         .HasColumnType("int");
 
+                    b.Property<int>("ChatRoomType")
+                        .HasColumnType("int");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("longtext");

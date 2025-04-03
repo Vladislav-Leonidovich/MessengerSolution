@@ -53,6 +53,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("rabbitmq://localhost", h =>
+        {
+            h.Username("guest");
+            h.Password("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");
+        });
+    });
+});
+
 // Add services to the container.
 // Зчитування рядка підключення з appsettings.json
 var connectionString = builder.Configuration.GetConnectionString("ChatDatabase")

@@ -3,100 +3,100 @@
 @using MauiClient.ViewModels
 @using ChatServiceDTOs.Chats
 @inject IChatService ChatService
+@inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-@implements IDisposable
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
 
 @if (chatRooms == null)
 {
-		<p>Завантаження чатів...</p>
+						<p>Завантаження чатів...</p>
 }
 else if (!chatRooms.Any())
 {
-		<p>Чати не знайдено.</p>
-		<button @onclick="() => ReloadChats()">Reload</button>
+						<p>Чати не знайдено.</p>
 }
 else
 {
+<div>
+	<div class="search-bar">
+		<img class="input-search-icon" src="Images/Search.svg" alt="Icon" />
+		<input @bind="searchTerm" placeholder="Type username or chat name..." />
+	</div>
+	<div>
 		<ul class="chat-list">
-		@foreach (var chat in chatRooms)
-		{
-					<li class="chat-container">
-						<button @onclick="() => OpenChat(chat.Id)">
-							<div class="avatar-container">
-								<img src="/Images/Avatar.png" alt="Avatar" />
+			@foreach (var chat in chatRooms)
+			{
+			<li class="chat-select-container">
+				<button @onclick="() => OpenChat(chat.Id)">
+					<div class="avatar-container">
+						<img src="/Images/Avatar.png" alt="Avatar" />
+					</div>
+					<div class="chat-preview-container">
+						<div class="top-container">
+							<div class="header-text">
+									@chat.Name
 							</div>
-							<div class="chat-preview-container">
-								<div class="top-container">
-                                    <div class="chat-name">
-                                        @chat.Name
-                                    </div>
-                                    <div class="chat-created-at">
-                                        @chat.FormattedLastMessageDate
-                                    </div>
-								</div>
-								<div class="bottom-container">
-                                    <div class="chat-content">
-                                        @chat.LastMessagePreview.Content
-                                    </div>
-								</div>
+							<div class="functional-text">
+									@chat.FormattedLastMessageDate
 							</div>
-						</button>
-					</li>
-		}
+						</div>
+						<div class="bottom-container">
+							<div class="chat-content functional-text">
+									@chat.LastMessagePreview.Content
+							</div>
+						</div>
+					</div>
+				</button>
+				<!-- <button @onclick="Logout" style="color: green">Logout</button> -->
+			</li>
+			}
 		</ul>
+		<div class="custom-scroll-bar"></div>
+	</div>
+
+</div>
 }
 
 @code {
-    private IEnumerable<ChatRoomViewModel> chatRooms = new List<ChatRoomViewModel>();
-    private PeriodicTimer timer;
+	[Parameter] public EventCallback<int> OnChatSelected { get; set; }
+	private IEnumerable<ChatRoomViewModel> chatRooms = new List<ChatRoomViewModel>();
+	private string? searchTerm;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadChatsAsync();
-        // Запускаем таймер, который будет обновлять данные каждые 5 секунд
-        /*timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        _ = UpdateChatsPeriodicallyAsync();*/
-    }
+	protected override async Task OnInitializedAsync()
+	{
+		await LoadChatsAsync();
+	}
 
-    private async Task UpdateChatsPeriodicallyAsync()
-    {
-        // Пока таймер не отменён, обновляем список чатов
-        while (await timer.WaitForNextTickAsync())
-        {
-            await LoadChatsAsync();
-        }
-    }
+	private async Task LoadChatsAsync()
+	{
+		try
+		{
+			var chatRoomDtos = await ChatService.GetPrivateChatRoomsAsync();
+			chatRooms = chatRoomDtos.Select(chat => new ChatRoomViewModel
+				{
+					Id = chat.Id,
+					Name = chat.Name,
+					LastMessagePreview = chat.LastMessagePreview
+				}).ToList();
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Помилка завантаження чатів: {ex.Message}");
+		}
+	}
 
-    private async Task LoadChatsAsync()
-    {
-        try
-        {
-            var chatRoomDtos = await ChatService.GetPrivateChatRoomsAsync();
-            chatRooms = chatRoomDtos.Select(chat => new ChatRoomViewModel
-                {
-                    Id = chat.Id,
-                    Name = chat.Name,
-                    LastMessagePreview = chat.LastMessagePreview
-                }).ToList();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Помилка завантаження чатів: {ex.Message}");
-        }
-    }
+	private void OpenChat(int chatId)
+	{
+		OnChatSelected.InvokeAsync(chatId);
+	}
 
-    private void OpenChat(int chatId)
-    {
-        NavigationManager.NavigateTo($"/chat/{chatId}");
-    }
-
-    private async Task ReloadChats()
-    {
-        await LoadChatsAsync();
-    }
-
-    public void Dispose()
-    {
-        timer?.Dispose();
-    }
+	private async Task Logout()
+	{
+		// Оновлюємо стан автентифікації
+		if (AuthenticationStateProvider is ClientAuthenticationStateProvider clientAuthStateProvider)
+		{
+			await clientAuthStateProvider.Logout();
+		}
+	}
 }

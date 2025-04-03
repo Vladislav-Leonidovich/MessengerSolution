@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using ChatService.Consumers;
 using MassTransit;
 using MessageService.Data;
+using MessageService.Hubs;
 using MessageService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +17,7 @@ builder.Services.AddHttpContextAccessor();
 // Налаштування MassTransit з RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<ChatDeletedEventConsumer>();
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host("rabbitmq://localhost", h =>
@@ -22,8 +25,23 @@ builder.Services.AddMassTransit(x =>
             h.Username("guest");
             h.Password("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");
         });
+
+        cfg.ReceiveEndpoint("chat_deleted_queue", e =>
+        {
+            // Спочатку вказуємо властивості черги
+            e.Durable = true;       // Черга переживе перезапуск RabbitMQ
+            e.AutoDelete = false;   // Черга не видалиться сама при відключенні
+            e.PrefetchCount = 10;
+
+            // Потім підключаємо споживача
+            e.ConfigureConsumer<ChatDeletedEventConsumer>(context);
+        });
+
+        cfg.UseMessageRetry(r => r.Incremental(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
     });
 });
+
+builder.Services.AddSignalR();
 
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("MessageDatabase")
@@ -123,6 +141,8 @@ if (app.Environment.IsDevelopment())
 
 // Настройка middleware
 app.UseRouting();
+
+app.MapHub<MessageHub>("/messageHub");
 
 app.UseHttpsRedirection();
 

@@ -1,41 +1,73 @@
 ﻿@page "/login"
+@attribute [AllowAnonymous]
 @using IdentityService.DTOs
 @using MauiClient.Services
+@using Microsoft.AspNetCore.WebUtilities
+@using MauiClient.Components.Layout
+@using MauiClient.Resources.Localization
+@layout NoLayout
 @inject IAuthService AuthService
-@inject ITokenService TokenService
-@inject NavigationManager NavigationManager
-
-<h3>Вхід користувача</h3>
-
-<div>
-    <input @bind="loginModel.UserName" placeholder="Логін" />
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject LocalizationResourceManager Loc
+<div class="login-wrapper">
+	<div class="login-container">
+		<h2 class="login-title">@LoginPage.LoginTitle</h2>
+		<div class="input-login-container">
+			<input @bind="username" placeholder="@LoginPage.InputUsernamePlaceholder" />
+			<input @bind="password" placeholder="@LoginPage.InputPasswordPlaceholder" type="password" />
+			@if(errorMessage != null)
+			{
+				<div style="color:red">
+					@errorMessage
+				</div>
+			}
+			<button class="submit-login-btn" @onclick="HandleLogin">@LoginPage.SubmitBtn</button>
+			<div class="login-bottom-btn-group">
+				<button class="link-button" @onclick="HandleForgotPassword">@LoginPage.ForgotPasswordBtn</button>
+				<button class="link-button" @onclick="HandleRegister">@LoginPage.CreateAccountBtn</button>
+			</div>
+		</div>
+	</div>
 </div>
-<div>
-    <input type="password" @bind="loginModel.Password" placeholder="Пароль" />
-</div>
-	<button @onclick="OnLogin">Увійти</button>
 
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <p style="color:red;">@errorMessage</p>
-}
 @code {
-    // Модель для логіну
-    private LoginDto loginModel = new LoginDto();
-    private string errorMessage = string.Empty;
+	private string? username;
+	private string? password;
+	private string? errorMessage;
+	private bool isClearingError = false;
 
-    private async Task OnLogin()
-    {
-        var token = await AuthService.LoginAsync(loginModel);
-        if (!string.IsNullOrEmpty(token))
-        {
-            // При успішному вході можна зберегти токен і перейти на головну сторінку
-            await TokenService.SetTokenAsync(token);
-            NavigationManager.NavigateTo("/");
-        }
-        else
-        {
-            errorMessage = "Невірний логін або пароль.";
-        }
-    }
+	private async Task HandleLogin()
+	{
+		if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+		{
+			errorMessage = "Введіть логін та пароль.";
+			return;
+		}
+		// Виклик логіну через AuthService (LoginDto – DTO для логін даних)
+		var token = await AuthService.LoginAsync(new LoginDto { UserName = username, Password = password });
+		if (token != null)
+		{
+			// Оновлюємо стан автентифікації
+			if (AuthenticationStateProvider is ClientAuthenticationStateProvider clientAuthStateProvider)
+			{
+				await clientAuthStateProvider.Login(token);
+			}
+			Navigation.NavigateTo("/");
+		}
+		else
+		{
+			errorMessage = "Невірний логін або пароль.";
+		}
+	}
+
+	private void HandleRegister()
+	{
+		Navigation.NavigateTo("/register");
+	}
+
+	private void HandleForgotPassword()
+	{
+		Navigation.NavigateTo("/forgot-password");
+	}
 }

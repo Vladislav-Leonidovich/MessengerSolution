@@ -1,0 +1,29 @@
+﻿@inject AuthenticationStateProvider AuthStateProvider
+
+<h3>Debug Authentication State</h3>
+@if (authState is null)
+{
+    <p>Loading authentication state...</p>
+}
+else
+{
+    <p>User is @(authState.User.Identity?.IsAuthenticated == true ? "authenticated" : "anonymous")</p>
+    @if (authState.User.Identity?.IsAuthenticated == true)
+    {
+        <ul>
+            @foreach (var claim in authState.User.Claims)
+            {
+                <li>@claim.Type: @claim.Value</li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private AuthenticationState? authState;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+}

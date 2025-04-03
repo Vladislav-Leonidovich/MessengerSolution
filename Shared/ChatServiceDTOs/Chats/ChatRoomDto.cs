@@ -12,5 +12,6 @@ namespace ChatServiceDTOs.Chats
         public MessageDto LastMessagePreview { get; set; } = new MessageDto();
         // Список ідентифікаторів учасників
         public IEnumerable<int> ParticipantIds { get; set; } = new List<int>();
+        public ChatRoomType ChatRoomType { get; set; }
     }
 }
