@@ -16,6 +16,8 @@ namespace MauiClient.Services
         Task<bool> DeleteMessagesByChatRoomId(int chatRoomId);
         Task<ulong> GetMessagesCountByChatRoomIdAsync(int chatRoomId);
         Task StartConnectionAsync();
+        Task JoinChatRoomAsync(int chatRoomId);
+        Task LeaveChatRoomAsync(int chatRoomId);
         event Action<MessageDto> OnNewMessageReceived;
     }
 }

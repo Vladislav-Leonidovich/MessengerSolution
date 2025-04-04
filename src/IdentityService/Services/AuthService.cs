@@ -56,7 +56,7 @@ namespace IdentityService.Services
             return user;
         }
 
-        public async Task<AuthDto?> LoginAsync(LoginDto model)
+        public async Task<AuthDto?> LoginAsync(LoginDto model, string ipAddress)
         {
             // Пошук користувача по имені
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == model.UserName);
@@ -68,45 +68,57 @@ namespace IdentityService.Services
                 return null;
 
             // Створення JWT токена
-            var token = await CreateToken(user);
+            var token = await CreateToken(user, model, ipAddress);
             return token;
         }
 
-        public async Task<AuthDto?> RefreshTokenAsync(string currentRefreshToken)
+        public async Task<AuthDto?> RefreshTokenAsync(string currentRefreshToken, string ipAddress)
         {
-            // Знайдемо запис refresh токена в базі даних
+            // Найдем запись refresh токена в базе данных
             var refreshTokenEntry = await _context.UserRefreshTokens
                 .FirstOrDefaultAsync(rt => rt.RefreshToken == currentRefreshToken);
 
             if (refreshTokenEntry == null || refreshTokenEntry.IsExpired)
             {
-                // Якщо токен не знайдено або він прострочений, повертаємо null або кидаємо помилку
+                // Если токен не найден или он просрочен, возвращаем null или кидаем ошибку
                 return null;
             }
 
-            // Знайдемо користувача
+            // Найдем пользователя
             var user = await _context.Users.FindAsync(refreshTokenEntry.UserId);
             if (user == null)
             {
                 return null;
             }
 
-            // Генеруємо новий JWT access token (реалізація аналогічна вашому методу CreateToken)
-            var newAccessToken = await CreateToken(user); // Цей метод повертає AuthDto
+            // Создаем LoginDto с информацией об устройстве из refreshTokenEntry
+            var loginInfo = new LoginDto
+            {
+                UserName = user.UserName, // Требуется для создания JWT токена
+                Password = "", // Пустой пароль, так как при обновлении токена мы не проверяем пароль
+                DeviceName = refreshTokenEntry.DeviceName,
+                DeviceType = refreshTokenEntry.DeviceType,
+                OperatingSystem = refreshTokenEntry.OperatingSystem,
+                OsVersion = refreshTokenEntry.OsVersion
+            };
 
-            // За потреби можна згенерувати новий refresh token:
+            // Генерируем новый JWT access token
+            var newAccessToken = await CreateToken(user, loginInfo, ipAddress);
+
+            // Обновляем данные о последнем входе и IP-адресе
+            refreshTokenEntry.LastLogin = DateTime.UtcNow;
+            refreshTokenEntry.IpAddress = ipAddress;
+
+            // За потреби можно згенерувати новий refresh token:
             var newRefreshToken = GenerateRefreshToken();
-
-            // Оновлюємо refresh токен у базі даних (можна видалити старий, або замінити його)
             refreshTokenEntry.RefreshToken = newRefreshToken;
-            // Також оновлюємо дату закінчення терміну, наприклад:
             refreshTokenEntry.ExpiresAt = DateTime.UtcNow.AddDays(7);
             await _context.SaveChangesAsync();
 
-            // Повертаємо нові токени
+            // Возвращаем новые токены
             return new AuthDto
             {
-                Token = newAccessToken.Token, // access token
+                Token = newAccessToken.Token,
                 TokenExpiresAt = newAccessToken.TokenExpiresAt,
                 RefreshToken = refreshTokenEntry.RefreshToken,
                 RefreshTokenExpiresAt = refreshTokenEntry.ExpiresAt
@@ -142,38 +154,58 @@ namespace IdentityService.Services
             }
         }
 
-        private async Task<UserRefreshToken> CreateRefreshToken(User user)
+        private async Task<UserRefreshToken> CreateRefreshToken(User user, LoginDto loginInfo, string ipAddress)
         {
             if (user == null)
             {
                 return new UserRefreshToken();
             }
 
-            var existingToken = await _context.UserRefreshTokens
-        .FirstOrDefaultAsync(r => r.UserId == user.Id);
-
-
+            // Генерируем новый токен
             var newRefreshToken = GenerateRefreshToken();
             var newExpiration = DateTime.UtcNow.AddDays(7);
+
+            // Ищем существующий токен для этого устройства
+            var deviceIdentifier = $"{loginInfo.DeviceName}_{loginInfo.DeviceType}_{loginInfo.OperatingSystem}";
+            var existingToken = await _context.UserRefreshTokens
+                .FirstOrDefaultAsync(r => r.UserId == user.Id &&
+                                         (r.DeviceName == loginInfo.DeviceName &&
+                                          r.DeviceType == loginInfo.DeviceType &&
+                                          r.OperatingSystem == loginInfo.OperatingSystem));
+
             if (existingToken != null)
             {
-                _context.UserRefreshTokens.Remove(existingToken);
+                existingToken.RefreshToken = newRefreshToken;
+                existingToken.ExpiresAt = newExpiration;
+                existingToken.LastLogin = DateTime.UtcNow;
+                existingToken.IpAddress = ipAddress;
+                existingToken.IsActive = true;
+                existingToken.OsVersion = loginInfo.OsVersion;
+            }
+            else
+            {
+                existingToken = new UserRefreshToken
+                {
+                    UserId = user.Id,
+                    RefreshToken = newRefreshToken,
+                    ExpiresAt = newExpiration,
+                    DeviceName = loginInfo.DeviceName,
+                    DeviceType = loginInfo.DeviceType,
+                    OperatingSystem = loginInfo.OperatingSystem,
+                    OsVersion = loginInfo.OsVersion,
+                    IpAddress = ipAddress,
+                    LastLogin = DateTime.UtcNow,
+                    IsActive = true
+                };
+                await _context.UserRefreshTokens.AddAsync(existingToken);
             }
 
-            existingToken = new UserRefreshToken
-            {
-                UserId = user.Id,
-                RefreshToken = newRefreshToken,
-                ExpiresAt = newExpiration
-            };
-            await _context.UserRefreshTokens.AddAsync(existingToken);
-
             await _context.SaveChangesAsync();
-            return existingToken; ;
+            return existingToken;
         }
 
         // Створення JWT токена для аутентифікованого користувача
-        private async Task<AuthDto> CreateToken(User user)
+        private async Task<AuthDto> CreateToken(User user, LoginDto loginInfo, string ipAddress)
         {
             var jwtSecretKey = _configuration["JWT_SECRET_KEY"];
             if (string.IsNullOrEmpty(jwtSecretKey))
@@ -200,7 +232,7 @@ namespace IdentityService.Services
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            var refreshToken = await CreateRefreshToken(user);
+            var refreshToken = await CreateRefreshToken(user, loginInfo, ipAddress);
 
             return new AuthDto
             {

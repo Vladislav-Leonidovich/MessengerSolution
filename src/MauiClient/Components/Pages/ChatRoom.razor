@@ -94,7 +94,8 @@ else
 
 			await StartSignalR();
 
-			// 2. Підписуємось на оновлення
+			await MessageService.JoinChatRoomAsync(chatRoom.Id);
+
 			MessageService.OnNewMessageReceived += OnNewMessageReceived;
 
 			// 3. Завантажуємо кількість повідомлень
@@ -105,6 +106,21 @@ else
 			ChatRoomEmptyMessage = $"Помилка завантаження чату. Код помилки: {ex.Message}";
 		}
 
+	}
+
+	public void Dispose()
+	{
+		// Отписка от событий
+		if (MessageService != null)
+		{
+			MessageService.OnNewMessageReceived -= OnNewMessageReceived;
+		}
+
+		// Покидание группы чата
+		if (chatRoom != null && MessageService != null)
+		{
+			_ = MessageService.LeaveChatRoomAsync(chatRoom.Id);
+		}
 	}
 
 	/*protected override async Task OnParametersSetAsync()
@@ -131,9 +147,18 @@ else
 
 	private void OnNewMessageReceived(MessageDto newMessage)
 	{
-		// Додаємо нове повідомлення до списку
-		newMessages.Insert(0, newMessage); // Вставляємо на початок, якщо нові повідомлення з'являються на верху
-		StateHasChanged(); // Оновлюємо інтерфейс
+		// Проверяем, относится ли сообщение к текущему чату
+		if (newMessage.ChatRoomId != ChatRoomId)
+			return;
+
+		// Добавляем новое сообщение с логированием
+		Console.WriteLine($"Получено новое сообщение в UI: {newMessage.Content}");
+
+		// Добавляем сообщение в коллекцию
+		newMessages.Insert(0, newMessage);
+
+		// ВАЖНО: вызываем StateHasChanged в контексте UI-потока
+		InvokeAsync(StateHasChanged);
 	}
 
 	private async Task SendMessage()

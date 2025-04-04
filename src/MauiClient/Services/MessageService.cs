@@ -16,61 +16,72 @@ namespace MauiClient.Services
         private HubConnection? _connection;
         private List<MessageDto> _messages = new List<MessageDto>();
         public event Action<MessageDto>? OnNewMessageReceived;
+        private string _hubUrl = "https://localhost:7100/messageHub";
+        private bool _isConnected = false;
 
         public MessageService(HttpClient httpClient)
         {
             _httpClient = httpClient;
-            _connection = new HubConnectionBuilder()
-            .WithUrl("https://localhost:7103/chathub") // URL SignalR хабу
-            .Build();
-
-            _connection.On<MessageCreatedEvent>("ReceiveMessage", (message) =>
-            {
-                var newMessage = new MessageDto
-                {
-                    Id = message.Id,
-                    Content = message.Content,
-                    CreatedAt = message.CreatedAt,
-                    SenderUserId = message.SenderUserId,
-                    ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
-                    IsRead = message.IsRead,
-                    ReadAt = message.ReadAt,
-                    IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
-                };
-                _messages.Add(newMessage);
-                OnNewMessageReceived?.Invoke(newMessage);
-            });
         }
 
         public async Task StartConnectionAsync()
         {
-            var hubUrl = "https://localhost:7100/messageHub";
-            _connection = new HubConnectionBuilder()
-           .WithUrl(hubUrl, options =>
-           {
-               // (Опционально) для разработки можно разрешить самоподписанные сертификаты:
-               options.HttpMessageHandlerFactory = (handler) =>
-               {
-                   if (handler is HttpClientHandler clientHandler)
-                   {
-                       clientHandler.ServerCertificateCustomValidationCallback +=
-                           (sender, cert, chain, sslPolicyErrors) => true;
-                   }
-                   return handler;
-               };
-           })
-           .WithAutomaticReconnect()
-           .Build();
+            if (_isConnected)
+                return;
 
-            // Подписываемся на события от хаба (если необходимо)
+            _connection = new HubConnectionBuilder()
+               .WithUrl(_hubUrl, options =>
+               {
+                   options.HttpMessageHandlerFactory = (handler) =>
+                   {
+                       if (handler is HttpClientHandler clientHandler)
+                       {
+                           clientHandler.ServerCertificateCustomValidationCallback +=
+                               (sender, cert, chain, sslPolicyErrors) => true;
+                       }
+                       return handler;
+                   };
+               })
+               .WithAutomaticReconnect()
+               .Build();
+
+            // Регистрация обработчика сообщений
             _connection.On<MessageDto>("ReceiveMessage", (message) =>
             {
+                Console.WriteLine($"Получено новое сообщение: {message.Content}");
                 OnNewMessageReceived?.Invoke(message);
             });
 
-            await _connection.StartAsync();
+            try
+            {
+                await _connection.StartAsync();
+                _isConnected = true;
+                Console.WriteLine("Подключено к SignalR хабу");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка подключения к SignalR: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Добавьте методы для присоединения/покидания группы чата
+        public async Task JoinChatRoomAsync(int chatRoomId)
+        {
+            if (!_isConnected)
+                await StartConnectionAsync();
+
+            Console.WriteLine($"Присоединяемся к группе чата: {chatRoomId}");
+            await _connection!.InvokeAsync("JoinGroup", chatRoomId.ToString());
+        }
+
+        public async Task LeaveChatRoomAsync(int chatRoomId)
+        {
+            if (!_isConnected)
+                return;
+
+            Console.WriteLine($"Покидаем группу чата: {chatRoomId}");
+            await _connection!.InvokeAsync("LeaveGroup", chatRoomId.ToString());
         }
 
         public async Task<MessageDto?> SendMessageAsync(SendMessageDto model)

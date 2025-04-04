@@ -35,7 +35,9 @@ namespace IdentityService.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto model)
         {
-            var authResponse = await _authService.LoginAsync(model);
+            string ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+
+            var authResponse = await _authService.LoginAsync(model, ipAddress);
             if (authResponse == null)
             {
                 return Unauthorized(new { Message = "Неправильне ім'я користувача або пароль" });
@@ -47,7 +49,9 @@ namespace IdentityService.Controllers
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto request)
         {
-            var authResponse = await _authService.RefreshTokenAsync(request.RefreshToken);
+            string ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+
+            var authResponse = await _authService.RefreshTokenAsync(request.RefreshToken, ipAddress);
             if (authResponse == null)
             {
                 return Unauthorized(new { Message = "Invalid or expired refresh token." });

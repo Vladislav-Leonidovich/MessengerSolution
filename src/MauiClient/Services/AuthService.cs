@@ -31,6 +31,11 @@ namespace MauiClient.Services
 
         public async Task<string?> LoginAsync(LoginDto model)
         {
+            model.DeviceName = DeviceInfo.Name;
+            model.DeviceType = DeviceInfo.DeviceType.ToString();
+            model.OperatingSystem = DeviceInfo.Platform.ToString();
+            model.OsVersion = DeviceInfo.VersionString;
+
             var response = await _httpClient.PostAsJsonAsync("api/auth/login", model);
             if (response.IsSuccessStatusCode)
             {
