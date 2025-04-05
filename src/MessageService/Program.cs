@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using ChatService.Consumers;
 using MassTransit;
+using MessageService.Consumers;
 using MessageService.Data;
 using MessageService.Hubs;
 using MessageService.Services;
@@ -17,6 +18,7 @@ builder.Services.AddHttpContextAccessor();
 // Налаштування MassTransit з RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<MessageCreatedEventConsumer>();
     x.AddConsumer<ChatDeletedEventConsumer>();
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -26,7 +28,18 @@ builder.Services.AddMassTransit(x =>
             h.Password("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");
         });
 
-        cfg.ReceiveEndpoint("chat_deleted_queue", e =>
+        cfg.ReceiveEndpoint("message-service-message-created", e =>
+        {
+            // Спочатку вказуємо властивості черги
+            e.Durable = true;       // Черга переживе перезапуск RabbitMQ
+            e.AutoDelete = false;   // Черга не видалиться сама при відключенні
+            e.PrefetchCount = 10;
+
+            // Потім підключаємо споживача
+            e.ConfigureConsumer<MessageCreatedEventConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("message-service-chat-deleted", e =>
         {
             // Спочатку вказуємо властивості черги
             e.Durable = true;       // Черга переживе перезапуск RabbitMQ

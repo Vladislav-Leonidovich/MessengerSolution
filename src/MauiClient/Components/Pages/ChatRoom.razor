@@ -2,10 +2,13 @@
 @using MauiClient.Services
 @using ChatServiceDTOs.Chats
 @using MessageServiceDTOs
+@using System.Security.Claims
 @inject IChatService ChatService
 @inject IMessageService MessageService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JSRuntime
 @attribute [Authorize]
+@implements IDisposable
 
 
 
@@ -31,13 +34,26 @@ else
 				<button class="custom-button"><img src="/Images/moreicon.svg" alt="More Options" /></button>
 			</div>
 		</div>
-		<div class="chat-messages custom-scroll">
-			<Virtualize TItem="MessageDto" ItemsProvider="LoadMessages" Context="message" ItemSize="50">
-				<div class="message-item">
+		<div class="chat-messages custom-scroll" id="chat-messages-container" @ref="messagesContainer">
+			@* Отображаем сначала новые сообщения *@
+			@foreach (var message in messages.OrderByDescending(m => m.CreatedAt))
+			{
+				<div class="message-item @(message.SenderUserId == currentUserId ? "own-message" : "other-message")">
 					<p class="default-text">@message.Content</p>
 					<p class="created-at functional-text">@message.CreatedAt.ToString("HH:mm")</p>
+					@if (message.IsEdited)
+					{
+						<span class="edited-mark">Edited</span>
+					}
 				</div>
-			</Virtualize>
+			}
+
+			@if (isLoading)
+			{
+				<div class="loading-indicator">
+					<p>Loading more messages...</p>
+				</div>
+			}
 		</div>
 		<div class="chat-input">
 			<div class="bottom-chat-container">
@@ -70,140 +86,207 @@ else
 }
 
 @code {
-	[Parameter]
-	public int ChatRoomId { get; set; }
+    [Parameter]
+    public int ChatRoomId { get; set; }
 
-	private List<MessageDto> newMessages = new();
-	private int serverTotalMessages = 0;
-	public string ChatRoomEmptyMessage { get; set; } = string.Empty;
-	private int totalMessages = 0;
-	private string Text { get; set; } = string.Empty;
-	private ChatRoomDto? chatRoom;
+    private ElementReference messagesContainer;
+    private List<MessageDto> messages = new List<MessageDto>();
+    private int currentUserId;
+    private bool isLoading = false;
+    private bool isFirstLoad = true;
+    private int pageSize = 20;
+    private int currentPage = 0;
+    private int totalMessages = 0;
+    private string Text { get; set; } = string.Empty;
+    private ChatRoomDto? chatRoom;
+    private string ChatRoomEmptyMessage { get; set; } = string.Empty;
 
-	protected override async Task OnInitializedAsync()
-	{
-		try
-		{
-			chatRoom = await ChatService.GetPrivateChatRoomAsync(ChatRoomId);
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Получение информации о текущем пользователе
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+            }
 
-			if (chatRoom == null)
-			{
-				ChatRoomEmptyMessage = "Чат не знайдено.";
-				return;
-			}
+            // Загрузка информации о чате
+            chatRoom = await ChatService.GetPrivateChatRoomAsync(ChatRoomId);
+            if (chatRoom == null)
+            {
+                ChatRoomEmptyMessage = "Чат не знайдено.";
+                return;
+            }
 
-			await StartSignalR();
+            // Подключение к SignalR
+            await StartSignalR();
+            await MessageService.JoinChatRoomAsync(ChatRoomId);
+            MessageService.OnNewMessageReceived += HandleNewMessage;
 
-			await MessageService.JoinChatRoomAsync(chatRoom.Id);
+            // Загрузка количества сообщений
+            totalMessages = (int)await MessageService.GetMessagesCountByChatRoomIdAsync(ChatRoomId);
 
-			MessageService.OnNewMessageReceived += OnNewMessageReceived;
+            // Загрузка первой партии сообщений
+            await LoadInitialMessages();
+        }
+        catch (Exception ex)
+        {
+            ChatRoomEmptyMessage = $"Помилка завантаження чату: {ex.Message}";
+        }
+    }
 
-			// 3. Завантажуємо кількість повідомлень
-			serverTotalMessages = (int)await MessageService.GetMessagesCountByChatRoomIdAsync(chatRoom.Id);
-		}
-		catch (Exception ex)
-		{
-			ChatRoomEmptyMessage = $"Помилка завантаження чату. Код помилки: {ex.Message}";
-		}
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("setupScrollListener",
+                messagesContainer, DotNetObjectReference.Create(this));
 
-	}
+            if (messages.Any())
+            {
+                await JSRuntime.InvokeVoidAsync("scrollToBottom", "chat-messages-container");
+            }
+        }
 
-	public void Dispose()
-	{
-		// Отписка от событий
-		if (MessageService != null)
-		{
-			MessageService.OnNewMessageReceived -= OnNewMessageReceived;
-		}
+        if (isFirstLoad && messages.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", "chat-messages-container");
+            isFirstLoad = false;
+        }
+    }
 
-		// Покидание группы чата
-		if (chatRoom != null && MessageService != null)
-		{
-			_ = MessageService.LeaveChatRoomAsync(chatRoom.Id);
-		}
-	}
+    private async Task LoadInitialMessages()
+    {
+        isLoading = true;
+        StateHasChanged();
 
-	/*protected override async Task OnParametersSetAsync()
-	{
-		if (ChatRoomId != prevChatRoomId)
-		{
-			await LoadChatData();
-		}
-	}*/
+        try
+        {
+            // Загружаем первые сообщения
+            var loadedMessages = await MessageService.GetMessagesAsync(ChatRoomId, 0, pageSize);
+            messages.AddRange(loadedMessages);
+            currentPage++;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
 
-	private async Task StartSignalR()
-	{
-		try
-		{
-			await MessageService.StartConnectionAsync();
-		}
-		catch
-		{
-			// Спробувати перепідключитися через 5 сек
-			await Task.Delay(5000);
-			await StartSignalR();
-		}
-	}
+    [JSInvokable]
+    public async Task LoadMoreMessages()
+    {
+        if (isLoading || currentPage * pageSize >= totalMessages)
+            return;
 
-	private void OnNewMessageReceived(MessageDto newMessage)
-	{
-		// Проверяем, относится ли сообщение к текущему чату
-		if (newMessage.ChatRoomId != ChatRoomId)
-			return;
+        isLoading = true;
+        StateHasChanged();
 
-		// Добавляем новое сообщение с логированием
-		Console.WriteLine($"Получено новое сообщение в UI: {newMessage.Content}");
+        try
+        {
+            var scrollPosition = await JSRuntime.InvokeAsync<double>("getScrollPosition", messagesContainer);
 
-		// Добавляем сообщение в коллекцию
-		newMessages.Insert(0, newMessage);
+            var loadedMessages = await MessageService.GetMessagesAsync(
+                ChatRoomId, currentPage * pageSize, pageSize);
 
-		// ВАЖНО: вызываем StateHasChanged в контексте UI-потока
-		InvokeAsync(StateHasChanged);
-	}
+            if (loadedMessages.Any())
+            {
+                messages.AddRange(loadedMessages);
+                currentPage++;
 
-	private async Task SendMessage()
-	{
-		if (string.IsNullOrWhiteSpace(Text))
-		{
-			return;
-		}
-		if (chatRoom == null)
-		{
-			return;
-		}
-		var message = new SendMessageDto
-			{
-				ChatRoomId = chatRoom.Id,
-				ChatRoomType = chatRoom.ChatRoomType,
-				Content = Text
-			};
-		await MessageService.SendMessageAsync(message);
-		Text = string.Empty;
-	}
+                // Восстанавливаем позицию прокрутки
+                await JSRuntime.InvokeVoidAsync("restoreScrollPosition",
+                    messagesContainer, scrollPosition);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading more messages: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
 
-	private async ValueTask<ItemsProviderResult<MessageDto>> LoadMessages(ItemsProviderRequest request)
-	{
-		if (chatRoom == null)
-		{
-			return new ItemsProviderResult<MessageDto>(new List<MessageDto>(), 0);
-		}
+    private void HandleNewMessage(MessageDto newMessage)
+    {
+        if (newMessage.ChatRoomId != ChatRoomId)
+            return;
 
-		// Загальна кількість = серверні + локальні нові
-		int totalCount = serverTotalMessages + newMessages.Count;
+        // Проверяем, нет ли уже такого сообщения
+        if (!messages.Any(m => m.Id == newMessage.Id))
+        {
+            messages.Add(newMessage);
+            totalMessages++;
 
-		// Якщо запит стосується нових повідомлень
-		if (request.StartIndex < newMessages.Count)
-		{
-			int count = Math.Min(request.Count, newMessages.Count - request.StartIndex);
-			var items = newMessages.Skip(request.StartIndex).Take(count).ToList();
-			return new ItemsProviderResult<MessageDto>(items, totalCount);
-		}
-		else
-		{
-			// Завантажуємо історичні повідомлення з сервера
-			int serverStart = request.StartIndex - newMessages.Count;
-			var serverMessages = await MessageService.GetMessagesAsync(chatRoom.Id, serverStart, request.Count);
-			return new ItemsProviderResult<MessageDto>(serverMessages, totalCount);
-		}
-	}
+            InvokeAsync(async () =>
+            {
+                StateHasChanged();
+                await Task.Delay(100);
+                await JSRuntime.InvokeVoidAsync("scrollToBottom", "chat-messages-container");
+            });
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(Text) || chatRoom == null)
+            return;
+
+        var message = new SendMessageDto
+            {
+                ChatRoomId = chatRoom.Id,
+                ChatRoomType = chatRoom.ChatRoomType,
+                Content = Text
+            };
+
+        try
+        {
+            await MessageService.SendMessageAsync(message);
+            Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+        }
+    }
+
+    private async Task StartSignalR()
+    {
+        try
+        {
+            await MessageService.StartConnectionAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error connecting to SignalR: {ex.Message}");
+            // Пробуем переподключиться через некоторое время
+            await Task.Delay(5000);
+            await StartSignalR();
+        }
+    }
+
+    public void Dispose()
+    {
+        // Отписываемся от событий и покидаем группу чата
+        if (MessageService != null)
+        {
+            MessageService.OnNewMessageReceived -= HandleNewMessage;
+
+            if (chatRoom != null)
+            {
+                _ = MessageService.LeaveChatRoomAsync(chatRoom.Id);
+            }
+        }
+    }
 }
