@@ -1,27 +1,7 @@
-﻿// wwwroot/js/chat.js
+﻿// Add these functions to your wwwroot/index.html or a separate .js file
+// Then include the script in your index.html
 
-// Автоматическое изменение высоты текстового поля
-function autoResizeTextarea(textarea) {
-    const minHeight = 35;
-    const maxHeight = 150;
-
-    // Сбрасываем высоту
-    textarea.style.height = 'auto';
-
-    // Устанавливаем новую высоту
-    if (textarea.scrollHeight <= minHeight) {
-        textarea.style.height = `${minHeight}px`;
-        textarea.style.overflowY = 'hidden';
-    } else if (textarea.scrollHeight <= maxHeight) {
-        textarea.style.height = `${textarea.scrollHeight}px`;
-        textarea.style.overflowY = 'hidden';
-    } else {
-        textarea.style.height = `${maxHeight}px`;
-        textarea.style.overflowY = 'auto';
-    }
-}
-
-// Прокрутка вниз
+// Scroll to the bottom of the chat container
 function scrollToBottom(elementId) {
     const element = document.getElementById(elementId);
     if (element) {
@@ -29,25 +9,31 @@ function scrollToBottom(elementId) {
     }
 }
 
-// Получение текущей позиции прокрутки
+// Get the current scroll position
 function getScrollPosition(element) {
-    return element.scrollTop;
+    if (element) {
+        return element.scrollTop;
+    }
+    return 0;
 }
 
-// Восстановление позиции прокрутки
+// Restore scroll position after loading new messages
 function restoreScrollPosition(element, position) {
-    element.scrollTop = position;
+    if (element) {
+        element.scrollTop = position;
+    }
 }
 
-// Установка обработчика прокрутки для подгрузки сообщений
-let isLoadingMore = false;
+// Setup scroll listener for infinite scrolling
 function setupScrollListener(element, dotNetHelper) {
-    element.addEventListener('scroll', async function () {
-        // Если пользователь прокрутил почти до верха, загружаем еще сообщения
-        if (element.scrollTop < 50 && !isLoadingMore) {
-            isLoadingMore = true;
-            await dotNetHelper.invokeMethodAsync('LoadMoreMessages');
-            isLoadingMore = false;
+    if (!element) return;
+
+    // Add event listener for scroll
+    element.addEventListener('scroll', function () {
+        // If scrolled to near top (with a small threshold)
+        if (element.scrollTop < 50) {
+            // Call the .NET method
+            dotNetHelper.invokeMethodAsync('LoadMoreMessages');
         }
     });
 }

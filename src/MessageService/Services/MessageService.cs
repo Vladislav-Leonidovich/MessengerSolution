@@ -82,7 +82,7 @@ namespace MessageService.Services
                 ChatRoomId = message.ChatRoomId,
                 ChatRoomType = message.ChatRoomType,
                 SenderUserId = message.SenderUserId,
-                Content = message.Content,
+                Content = model.Content,
                 IsRead = message.IsRead,
                 ReadAt = message.ReadAt,
                 CreatedAt = message.CreatedAt,
