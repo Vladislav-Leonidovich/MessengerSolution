@@ -103,7 +103,7 @@ else
     {
         try
         {
-            // Получение информации о текущем пользователе
+            // Get current user ID (this only needs to happen once)
             var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
@@ -111,29 +111,56 @@ else
                 currentUserId = userId;
             }
 
-            // Загрузка информации о чате
-            chatRoom = await ChatService.GetPrivateChatRoomAsync(ChatRoomId);
-            if (chatRoom == null)
-            {
-                ChatRoomEmptyMessage = "Чат не знайдено.";
-                return;
-            }
-
-            // Подключение к SignalR
+            // Connect to SignalR (only once)
             await StartSignalR();
-            await MessageService.JoinChatRoomAsync(ChatRoomId);
             MessageService.OnNewMessageReceived += HandleNewMessage;
 
-            // Загрузка количества сообщений
-            totalMessages = (int)await MessageService.GetMessagesCountByChatRoomIdAsync(ChatRoomId);
-
-            // Загрузка первой партии сообщений
-            await LoadInitialMessages();
+            // Initial loading happens in OnParametersSetAsync
         }
         catch (Exception ex)
         {
             ChatRoomEmptyMessage = $"Помилка завантаження чату: {ex.Message}";
-            return;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Check if the ChatRoomId has changed
+        if (chatRoom == null || chatRoom.Id != ChatRoomId)
+        {
+            // Reset state
+            messages.Clear();
+            isFirstLoad = true;
+            currentPage = 0;
+            ChatRoomEmptyMessage = string.Empty;
+
+            // If already connected to a previous chat, leave it
+            if (chatRoom != null)
+            {
+                await MessageService.LeaveChatRoomAsync(chatRoom.Id);
+            }
+
+            try
+            {
+                // Reload chat room data
+                chatRoom = await ChatService.GetPrivateChatRoomAsync(ChatRoomId);
+                if (chatRoom == null)
+                {
+                    ChatRoomEmptyMessage = "Чат не знайдено.";
+                    return;
+                }
+
+                // Join the new chat room
+                await MessageService.JoinChatRoomAsync(ChatRoomId);
+
+                // Reload messages
+                totalMessages = (int)await MessageService.GetMessagesCountByChatRoomIdAsync(ChatRoomId);
+                await LoadInitialMessages();
+            }
+            catch (Exception ex)
+            {
+                ChatRoomEmptyMessage = $"Помилка завантаження чату: {ex.Message}";
+            }
         }
     }
 

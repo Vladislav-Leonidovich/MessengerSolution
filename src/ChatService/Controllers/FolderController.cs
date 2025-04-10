@@ -2,121 +2,133 @@
 using ChatService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ChatService.Attributes;
+using System.Security.Claims;
+using Shared.Authorization.Permissions;
 
 namespace ChatService.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
-    public class FolderController : Controller
+    public class FolderController : ControllerBase
     {
         private readonly IFolderService _folderService;
+        private readonly ILogger<FolderController> _logger;
 
-        public FolderController(IFolderService folderService)
+        public FolderController(IFolderService folderService, ILogger<FolderController> logger)
         {
             _folderService = folderService;
+            _logger = logger;
         }
 
-        // Отримує список папок
         // GET: api/folder
-        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetFolders()
         {
-            var folders = await _folderService.GetFoldersAsync();
-            return Ok(folders);
+            var userId = GetUserId();
+            var result = await _folderService.GetFoldersAsync(userId);
+            return Ok(result);
         }
 
-        // Створює папку
+        // GET: api/folder/{folderId}
+        [HttpGet("{folderId}")]
+        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу
+        public async Task<IActionResult> GetFolderById(int folderId)
+        {
+            var userId = GetUserId();
+            var result = await _folderService.GetFolderByIdAsync(folderId, userId);
+            return Ok(result);
+        }
+
         // POST: api/folder/create
-        [Authorize]
         [HttpPost("create")]
-        public async Task<IActionResult> CreateFolder([FromBody] CreateFolderDto folderDto)
+        public async Task<IActionResult> CreateFolder([FromBody] CreateFolderDto model)
         {
-            var createdFolder = await _folderService.CreateFolderAsync(folderDto);
-            return CreatedAtAction(nameof(GetFolders), new { id = createdFolder.Id }, createdFolder);
+            var userId = GetUserId();
+            var result = await _folderService.CreateFolderAsync(model, userId);
+
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return CreatedAtAction(nameof(GetFolderById), new { folderId = result.Data?.Id }, result);
         }
 
-        // Ендпоінт для оновлення даних папки
         // PUT: api/folder/update
-        [Authorize]
         [HttpPut("update")]
-        public async Task<IActionResult> UpdateFolder([FromBody] FolderDto folderDto)
+        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу через FolderId в моделі
+        public async Task<IActionResult> UpdateFolder([FromBody] FolderDto model)
         {
-            var result = await _folderService.UpdateFolderAsync(folderDto);
-            if (!result)
+            var userId = GetUserId();
+            var result = await _folderService.UpdateFolderAsync(model, userId);
+
+            if (!result.Success)
             {
-                return NotFound();
+                return BadRequest(result);
             }
+
             return NoContent();
         }
-        // Ендпоінт для видалення папки
+
         // DELETE: api/folder/delete/{folderId}
-        [Authorize]
         [HttpDelete("delete/{folderId}")]
+        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> DeleteFolder(int folderId)
         {
-            var result = await _folderService.DeleteFolderAsync(folderId);
-            if (!result)
+            var userId = GetUserId();
+            var result = await _folderService.DeleteFolderAsync(folderId, userId);
+
+            if (!result.Success)
             {
-                return NotFound();
+                return BadRequest(result);
             }
+
             return NoContent();
         }
 
-        // Ендпоінт для призначення приватного чату до папки
         // POST: api/folder/{folderId}/assign-private-chat/{chatId}
-        [Authorize]
         [HttpPost("{folderId}/assign-private-chat/{chatId}")]
+        [RequireFolderAccess] // Перевіряємо доступ до папки
+        [RequirePermission(ChatPermission.AssignChatToFolder)]
         public async Task<IActionResult> AssignPrivateChatToFolder(int folderId, int chatId)
         {
-            var result = await _folderService.AssignPrivateChatToFolderAsync(chatId, folderId);
-            if (!result)
+            var userId = GetUserId();
+            var result = await _folderService.AssignChatToFolderAsync(chatId, folderId, false, userId);
+
+            if (!result.Success)
             {
-                return NotFound("Чат або папку не знайдено.");
+                return BadRequest(result);
             }
-            return Ok();
+
+            return Ok(result);
         }
 
-        // Ендпоінт для від'єднання приватного чату від папки
         // POST: api/folder/{folderId}/unassign-private-chat/{chatId}
-        [Authorize]
-        [HttpPost("{folderId}/unassign-private-chat/{chatId}")]
+        [HttpPost("unassign-private-chat/{chatId}")]
         public async Task<IActionResult> UnassignPrivateChatFromFolder(int chatId)
         {
-            var result = await _folderService.UnassignPrivateChatFromFolderAsync(chatId);
-            if (!result)
+            var userId = GetUserId();
+            var result = await _folderService.UnassignChatFromFolderAsync(chatId, false, userId);
+
+            if (!result.Success)
             {
-                return NotFound("Чат або папку не знайдено.");
+                return BadRequest(result);
             }
-            return Ok();
+
+            return Ok(result);
         }
 
-        // Ендпоінт для призначення групового чату до папки
-        // POST: api/folder/{folderId}/assign-group-chat/{chatId}
-        [Authorize]
-        [HttpPost("{folderId}/assign-group-chat/{chatId}")]
-        public async Task<IActionResult> AssignGroupChatToFolder(int folderId, int chatId)
+        // Допоміжний метод для отримання ID користувача з токена
+        private int GetUserId()
         {
-            var result = await _folderService.AssignGroupChatToFolderAsync(chatId, folderId);
-            if (!result)
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
-                return NotFound("Чат або папку не знайдено.");
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
-            return Ok();
-        }
-
-        // Ендпоінт для від'єднання групового чату від папки
-        // POST: api/folder/{folderId}/unassign-group-chat/{chatId}
-        [Authorize]
-        [HttpPost("{folderId}/unassign-group-chat/{chatId}")]
-        public async Task<IActionResult> UnassignGroupChatFromFolder(int chatId)
-        {
-            var result = await _folderService.UnassignGroupChatFromFolderAsync(chatId);
-            if (!result)
-            {
-                return NotFound("Чат або папку не знайдено.");
-            }
-            return Ok();
+            return userId;
         }
     }
 }

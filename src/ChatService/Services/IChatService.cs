@@ -1,25 +1,23 @@
 ﻿using ChatServiceDTOs.Chats;
 using ChatService.Models;
+using Shared.Responses;
 
 namespace ChatService.Services
 {
     public interface IChatService
     {
-        // Створює новий чат з вказаною назвою та списком користувачів
-        Task<ChatRoomDto> CreatePrivateChatRoomAsync(CreatePrivateChatRoomDto model);
-        Task<GroupChatRoomDto> CreateGroupChatRoomAsync(CreateGroupChatRoomDto model);
-
-        // Отримує список чатів, у яких бере участь вказаний користувач
-        Task<IEnumerable<ChatRoomDto>> GetPrivateChatRoomsForUserAsync();
-        Task<IEnumerable<GroupChatRoomDto>> GetGroupChatRoomsForUserAsync();
-        Task<IEnumerable<ChatRoomDto>> GetPrivateChatsForFolderAsync(int folderId);
-        Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsForFolderAsync(int folderId);
-        Task<IEnumerable<ChatRoomDto>> GetPrivateChatsWithoutFolderAsync();
-        Task<IEnumerable<GroupChatRoomDto>> GetGroupChatsWithoutFolderAsync();
-        Task<ChatRoomDto> GetPrivateChatByIdAsync(int chatRoomId);
-        Task<GroupChatRoomDto> GetGroupChatByIdAsync(int chatRoomId);
-        Task<bool> IsAuthUserInChatRoomsByChatRoomIdAsync(int chatRoomId);
-        Task<bool> DeletePrivateСhatAsync(int privateChatId);
-        Task<bool> DeleteGroupСhatAsync(int groupChatId);
+        Task<ApiResponse<ChatRoomDto>> GetPrivateChatByIdAsync(int chatRoomId, int userId);
+        Task<ApiResponse<GroupChatRoomDto>> GetGroupChatByIdAsync(int chatRoomId, int userId);
+        Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsForUserAsync(int userId);
+        Task<ApiResponse<IEnumerable<GroupChatRoomDto>>> GetGroupChatsForUserAsync(int userId);
+        Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsForFolderAsync(int folderId, int userId);
+        Task<ApiResponse<IEnumerable<GroupChatRoomDto>>> GetGroupChatsForFolderAsync(int folderId, int userId);
+        Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsWithoutFolderAsync(int userId);
+        Task<ApiResponse<IEnumerable<GroupChatRoomDto>>> GetGroupChatsWithoutFolderAsync(int userId);
+        Task<ApiResponse<ChatRoomDto>> CreatePrivateChatAsync(CreatePrivateChatRoomDto dto, int userId);
+        Task<ApiResponse<GroupChatRoomDto>> CreateGroupChatAsync(CreateGroupChatRoomDto dto, int userId);
+        Task<ApiResponse<bool>> DeletePrivateChatAsync(int chatRoomId, int userId);
+        Task<ApiResponse<bool>> DeleteGroupChatAsync(int chatRoomId, int userId);
+        Task<bool> IsUserInChatAsync(int userId, int chatRoomId);
     }
 }

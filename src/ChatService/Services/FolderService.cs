@@ -4,196 +4,200 @@ using ChatService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using ChatService.Authorization;
+using ChatService.Repositories.Interfaces;
+using Shared.Exceptions;
+using Shared.Responses;
 
 namespace ChatService.Services
 {
     public class FolderService : IFolderService
     {
-        private readonly ChatDbContext _context;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IFolderRepository _folderRepository;
+        private readonly IChatAuthorizationService _authService;
+        private readonly ILogger<FolderService> _logger;
 
-        public FolderService(ChatDbContext context, IHttpContextAccessor httpContextAccessor)
+        public FolderService(
+            IFolderRepository folderRepository,
+            IChatAuthorizationService authService,
+            ILogger<FolderService> logger)
         {
-            _context = context;
-            _httpContextAccessor = httpContextAccessor;
+            _folderRepository = folderRepository;
+            _authService = authService;
+            _logger = logger;
         }
 
-        // Метод для створення нової папки
-        public async Task<FolderDto> CreateFolderAsync(CreateFolderDto model)
+        public async Task<ApiResponse<IEnumerable<FolderDto>>> GetFoldersAsync(int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                var folders = await _folderRepository.GetFoldersForUserAsync(userId);
+                return ApiResponse<IEnumerable<FolderDto>>.Ok(folders);
             }
-
-            // Створюємо нову папку
-            var folder = new Folder
+            catch (Exception ex)
             {
-                Name = model.Name,
-                Order = model.Order,
-                UserId = currentUserId
-            };
+                _logger.LogError(ex, "Помилка при отриманні папок для користувача {UserId}", userId);
+                throw;
+            }
+        }
 
-            _context.Folders.Add(folder);
-            await _context.SaveChangesAsync(); // Зберігаємо, щоб отримати folder.Id
-
-            // Якщо в DTO вказані ідентифікатори чатів, призначаємо їх цій папці
-            if (model.ChatRoomIds != null && model.ChatRoomIds.Any())
+        public async Task<ApiResponse<FolderDto>> GetFolderByIdAsync(int folderId, int userId)
+        {
+            try
             {
-                var chats = await _context.ChatRooms
-                    .Where(cr => model.ChatRoomIds.Contains(cr.Id))
-                    .ToListAsync();
+                // Перевірка доступу
+                await _authService.EnsureCanAccessFolder(userId, folderId);
 
-                foreach (var chat in chats)
+                var folder = await _folderRepository.GetFolderByIdAsync(folderId);
+                if (folder == null)
                 {
-                    chat.FolderId = folder.Id;
+                    throw new EntityNotFoundException("Folder", folderId);
                 }
-                await _context.SaveChangesAsync();
-            }
 
-            return new FolderDto
+                return ApiResponse<FolderDto>.Ok(folder);
+            }
+            catch (EntityNotFoundException ex)
             {
-                Id = folder.Id,
-                Name = folder.Name,
-                Order = folder.Order
-            };
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<FolderDto>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні папки {FolderId}", folderId);
+                throw;
+            }
         }
 
-        public async Task<IEnumerable<FolderDto>> GetFoldersAsync()
+        public async Task<ApiResponse<FolderDto>> CreateFolderAsync(CreateFolderDto model, int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
-            }
-
-            return await _context.Folders
-                .Where(f => f.UserId == currentUserId)
-                .Select(f => new FolderDto
+                // Валідація даних
+                if (string.IsNullOrWhiteSpace(model.Name))
                 {
-                    Id = f.Id,
-                    Name = f.Name,
-                    Order = f.Order
-                })
-                .ToListAsync();
+                    throw new ValidationException("Назва папки не може бути порожньою");
+                }
+
+                var folder = await _folderRepository.CreateFolderAsync(model, userId);
+                return ApiResponse<FolderDto>.Ok(folder, "Папку успішно створено");
+            }
+            catch (ValidationException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<FolderDto>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при створенні папки для користувача {UserId}", userId);
+                throw;
+            }
         }
 
-        public async Task<bool> UpdateFolderAsync(FolderDto folderDto)
+        public async Task<ApiResponse<bool>> UpdateFolderAsync(FolderDto folderDto, int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                // Перевірка доступу
+                await _authService.EnsureCanAccessFolder(userId, folderDto.Id);
+                // Валідація даних
+                if (string.IsNullOrWhiteSpace(folderDto.Name))
+                {
+                    throw new ValidationException("Назва папки не може бути порожньою");
+                }
+                var result = await _folderRepository.UpdateFolderAsync(folderDto, userId);
+                return ApiResponse<bool>.Ok(result, "Папку успішно оновлено");
             }
-
-            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.Id == folderDto.Id);
-
-            if (folder == null)
-                return false;
-
-            folder.Name = folderDto.Name;
-            folder.Order = folderDto.Order;
-
-            await _context.SaveChangesAsync();
-            return true;
+            catch (ValidationException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при оновленні папки {FolderId} для користувача {UserId}", folderDto.Id, userId);
+                throw;
+            }
         }
 
-        public async Task<bool> DeleteFolderAsync(int folderId)
+        public async Task<ApiResponse<bool>> DeleteFolderAsync(int folderId, int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                // Перевірка доступу
+                await _authService.EnsureCanAccessFolder(userId, folderId);
+                var result = await _folderRepository.DeleteFolderAsync(folderId);
+                return ApiResponse<bool>.Ok(result, "Папку успішно видалено");
             }
-
-            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.Id == folderId);
-            if (folder == null)
-                return false;
-
-            _context.Folders.Remove(folder);
-            await _context.SaveChangesAsync();
-            return true;
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при видаленні папки {FolderId} для користувача {UserId}", folderId, userId);
+                throw;
+            }
         }
 
-        public async Task<bool> AssignPrivateChatToFolderAsync(int chatId, int folderId)
+        public async Task<ApiResponse<bool>> AssignChatToFolderAsync(int chatId, int folderId, bool isGroupChat, int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                // Перевірка доступу до папки
+                await _authService.EnsureCanAccessFolder(userId, folderId);
+                // Перевірка доступу до чату
+                if (!await _authService.CanAccessChatRoom(userId, chatId))
+                {
+                    throw new ForbiddenAccessException($"У вас немає доступу до чату з ID {chatId}");
+                }
+                var result = await _folderRepository.AssignChatToFolderAsync(chatId, folderId, isGroupChat);
+                return ApiResponse<bool>.Ok(result, "Чат успішно призначено на папку");
             }
-
-            var chat = await _context.PrivateChatRooms.FirstOrDefaultAsync(pcr => pcr.Id == chatId && pcr.UserChatRooms.Any(ucr => ucr.UserId == currentUserId));
-            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == currentUserId);
-
-            if (chat == null || folder == null)
-                return false;
-
-            chat.FolderId = folderId;
-            await _context.SaveChangesAsync();
-            return true;
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при призначенні чату {ChatId} на папку {FolderId}", chatId, folderId);
+                throw;
+            }
         }
 
-        public async Task<bool> UnassignPrivateChatFromFolderAsync(int chatId)
+        public async Task<ApiResponse<bool>> UnassignChatFromFolderAsync(int chatId, bool isGroupChat, int userId)
         {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            try
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                // Перевірка доступу до чату
+                if (!await _authService.CanAccessChatRoom(userId, chatId))
+                {
+                    throw new ForbiddenAccessException($"У вас немає доступу до чату з ID {chatId}");
+                }
+                var result = await _folderRepository.UnassignChatFromFolderAsync(chatId, isGroupChat);
+                return ApiResponse<bool>.Ok(result, "Чат успішно видалено з папки");
             }
-
-            var chat = await _context.PrivateChatRooms.FirstOrDefaultAsync(pcr => pcr.Id == chatId && pcr.UserChatRooms.Any(ucr => ucr.UserId == currentUserId));
-            if (chat == null || chat.FolderId == null)
-                return false;
-
-            chat.FolderId = null;
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> AssignGroupChatToFolderAsync(int chatId, int folderId)
-        {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            catch (ForbiddenAccessException ex)
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                _logger.LogWarning(ex.Message);
+                throw;
             }
-
-            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(gcr => gcr.Id == chatId && gcr.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId));
-            var folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == currentUserId);
-
-            if (chat == null || folder == null)
-                return false;
-
-            chat.FolderId = folderId;
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> UnassignGroupChatFromFolderAsync(int chatId)
-        {
-            // Отримуємо поточний userId із токену
-            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int currentUserId))
+            catch (Exception ex)
             {
-                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+                _logger.LogError(ex, "Помилка при видаленні чату {ChatId} з папки", chatId);
+                throw;
             }
-
-            var chat = await _context.GroupChatRooms.FirstOrDefaultAsync(gcr => gcr.Id == chatId && gcr.GroupChatMembers.Any(gcm => gcm.UserId == currentUserId));
-            if (chat == null || chat.FolderId == null)
-                return false;
-
-            chat.FolderId = null;
-            await _context.SaveChangesAsync();
-            return true;
         }
     }
 }

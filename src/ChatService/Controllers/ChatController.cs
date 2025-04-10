@@ -2,6 +2,9 @@
 using ChatService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ChatService.Attributes;
+using System.Security.Claims;
+using Shared.Authorization.Permissions;
 
 namespace ChatService.Controllers
 {
@@ -11,165 +14,99 @@ namespace ChatService.Controllers
     public class ChatController : ControllerBase
     {
         private readonly IChatService _chatService;
+        private readonly ILogger<ChatController> _logger;
 
-        public ChatController(IChatService chatService)
+        public ChatController(IChatService chatService, ILogger<ChatController> logger)
         {
             _chatService = chatService;
-        }
-
-        // POST: api/chat/create-private
-        // Створює новий приватний чат
-        [HttpPost("create-private")]
-        public async Task<IActionResult> CreatePrivateChat([FromBody] CreatePrivateChatRoomDto model)
-        {
-            if (model == null)
-            {
-                return BadRequest(new { Message = "Невірні дані для створення приватного чату." });
-            }
-
-            var response = await _chatService.CreatePrivateChatRoomAsync(model);
-            return Ok(response);
-        }
-
-        // POST: api/chat/create-group
-        // Створює новий груповий чат
-        [HttpPost("create-group")]
-        public async Task<IActionResult> CreateGroupChat([FromBody] CreateGroupChatRoomDto model)
-        {
-            if (model == null || string.IsNullOrWhiteSpace(model.Name))
-            {
-                return BadRequest(new { Message = "Невірні дані для створення групового чату." });
-            }
-
-            var response = await _chatService.CreateGroupChatRoomAsync(model);
-            return Ok(response);
-        }
-
-        // GET: api/chat/private
-        // Отримує список чатів без папки
-        [HttpGet("private")]
-        public async Task<IActionResult> GetPrivateChatsForUser()
-        {
-            var chats = await _chatService.GetPrivateChatRoomsForUserAsync();
-            return Ok(chats);
-        }
-
-        // GET: api/chat/group
-        // Отримує список чатів без папки
-        [HttpGet("group")]
-        public async Task<IActionResult> GetGroupChatsForUser()
-        {
-            var chats = await _chatService.GetGroupChatRoomsForUserAsync();
-            return Ok(chats);
-        }
-
-        // GET: api/chat/private/folder/{folderId}
-        // Отримує список приватних чатів з папки
-        [HttpGet("private/folder/{folderId}")]
-        public async Task<IActionResult> GetPrivateChatsForFolder(int folderId)
-        {
-            var chats = await _chatService.GetPrivateChatsForFolderAsync(folderId);
-            return Ok(chats);
-        }
-
-        // GET: api/chat/group/folder/{folderId}
-        // Отримує список групових чатів з папки
-        [HttpGet("group/folder/{folderId}")]
-        public async Task<IActionResult> GetGroupChatsForFolder(int folderId)
-        {
-            var chats = await _chatService.GetGroupChatsForFolderAsync(folderId);
-            return Ok(chats);
-        }
-
-        // GET: api/chat/private/no-folder
-        // Отримує список приватних чатів без папки
-        [HttpGet("private/no-folder")]
-        public async Task<IActionResult> GetPrivateChatsWithoutFolder()
-        {
-            var chats = await _chatService.GetPrivateChatsWithoutFolderAsync();
-            return Ok(chats);
-        }
-
-        // GET: api/chat/group/no-folder
-        // Отримує список групових чатів без папки
-        [HttpGet("group/no-folder")]
-        public async Task<IActionResult> GetGroupChatsWithoutFolder()
-        {
-            var chats = await _chatService.GetGroupChatsWithoutFolderAsync();
-            return Ok(chats);
-        }
-
-        // GET: api/chat/get-auth-user-in-chat/{chatRoomId}
-        // Перевіряє, чи є залогінений користувач у чаті
-        [HttpGet("get-auth-user-in-chat/{chatRoomId}")]
-        public async Task<IActionResult> IsAuthUserInChatRoomsByChatRoomId(int chatRoomId)
-        {
-            var response = await _chatService.IsAuthUserInChatRoomsByChatRoomIdAsync(chatRoomId);
-            return Ok(response);
-        }
-
-        // DELETE: api/chat/delete-private/{privateChatId}
-        // Видаляє приватний чат
-        [HttpDelete("delete-private/{privateChatId}")]
-        public async Task<IActionResult> DeletePrivateChat(int privateChatId)
-        {
-            var response = await _chatService.DeletePrivateСhatAsync(privateChatId);
-            if(response)
-            {
-                return Ok(response);
-            }
-            else
-            {
-                return BadRequest(new { Message = "Не вдалося видалити приватний чат." });
-            }
-        }
-
-        // DELETE: api/chat/delete-group/{groupChatId}
-        // Видаляє груповий чат
-        [HttpDelete("delete-group/{groupChatId}")]
-        public async Task<IActionResult> DeleteGroupChat(int groupChatId)
-        {
-            var response = await _chatService.DeleteGroupСhatAsync(groupChatId);
-            if (response)
-            {
-                return Ok(response);
-            }
-            else
-            {
-                return BadRequest(new { Message = "Не вдалося видалити груповий чат." });
-            }
+            _logger = logger;
         }
 
         // GET: api/chat/private/{chatRoomId}
-        // Отримує приватний чат за його ідентифікатором
         [HttpGet("private/{chatRoomId}")]
+        [RequireChatAccess] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> GetPrivateChatById(int chatRoomId)
         {
-            try
-            {
-                var chat = await _chatService.GetPrivateChatByIdAsync(chatRoomId);
-                return Ok(chat);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            var userId = GetUserId();
+            var result = await _chatService.GetPrivateChatByIdAsync(chatRoomId, userId);
+            return Ok(result);
         }
 
         // GET: api/chat/group/{chatRoomId}
-        // Отримує груповий чат за його ідентифікатором
         [HttpGet("group/{chatRoomId}")]
+        [RequireChatAccess] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> GetGroupChatById(int chatRoomId)
         {
-            try
+            var userId = GetUserId();
+            var result = await _chatService.GetGroupChatByIdAsync(chatRoomId, userId);
+            return Ok(result);
+        }
+
+        // GET: api/chat/private
+        [HttpGet("private")]
+        public async Task<IActionResult> GetPrivateChatsForUser()
+        {
+            var userId = GetUserId();
+            var result = await _chatService.GetPrivateChatsForUserAsync(userId);
+            return Ok(result);
+        }
+
+        // GET: api/chat/group
+        [HttpGet("group")]
+        public async Task<IActionResult> GetGroupChatsForUser()
+        {
+            var userId = GetUserId();
+            var result = await _chatService.GetGroupChatsForUserAsync(userId);
+            return Ok(result);
+        }
+
+        // POST: api/chat/create-private
+        [HttpPost("create-private")]
+        public async Task<IActionResult> CreatePrivateChat([FromBody] CreatePrivateChatRoomDto model)
+        {
+            var userId = GetUserId();
+            var result = await _chatService.CreatePrivateChatAsync(model, userId);
+            return CreatedAtAction(nameof(GetPrivateChatById), new { chatRoomId = result.Data?.Id }, result);
+        }
+
+        // DELETE: api/chat/delete-private/{chatRoomId}
+        [HttpDelete("delete-private/{chatRoomId}")]
+        [RequireChatAccess] // Використовуємо атрибут для перевірки доступу
+        public async Task<IActionResult> DeletePrivateChat(int chatRoomId)
+        {
+            var userId = GetUserId();
+            var result = await _chatService.DeletePrivateChatAsync(chatRoomId, userId);
+            return Ok(result);
+        }
+
+        // DELETE: api/chat/delete-group/{chatRoomId}
+        [HttpDelete("delete-group/{chatRoomId}")]
+        [RequireChatAccess] // Використовуємо атрибут для перевірки доступу
+        public async Task<IActionResult> DeleteGroupChat(int chatRoomId)
+        {
+            var userId = GetUserId();
+            var result = await _chatService.DeleteGroupChatAsync(chatRoomId, userId);
+            return Ok(result);
+        }
+
+        // GET: api/chat/get-auth-user-in-chat/{chatRoomId}
+        [HttpGet("get-auth-user-in-chat/{chatRoomId}")]
+        public async Task<IActionResult> IsAuthUserInChatRoom(int chatRoomId)
+        {
+            var userId = GetUserId();
+            var result = await _chatService.IsUserInChatAsync(userId, chatRoomId);
+            return Ok(result);
+        }
+
+        // Допоміжний метод для отримання ID користувача з токена
+        private int GetUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
-                var chat = await _chatService.GetGroupChatByIdAsync(chatRoomId);
-                return Ok(chat);
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Message = ex.Message });
-            }
+            return userId;
         }
     }
 }

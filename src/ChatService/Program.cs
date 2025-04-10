@@ -1,16 +1,24 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using ChatService.Authorization;
 using ChatService.Data;
+using ChatService.Middleware;
+using ChatService.Repositories.Interfaces;
+using ChatService.Repositories;
 using ChatService.Services;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Shared.Authorization.Permissions;
+using Shared.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHttpContextAccessor();
+builder.Services.AddDbContext<ChatDbContext>(options =>
+    options.UseMySQL(builder.Configuration.GetConnectionString("ChatDatabase") ??
+        throw new InvalidOperationException("Connection string 'ChatDatabase' not found.")));
 
 // Додайте CORS-сервіси
 builder.Services.AddCors(options =>
@@ -53,32 +61,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddMassTransit(x =>
-{
-    x.UsingRabbitMq((context, cfg) =>
-    {
-        cfg.Host("rabbitmq://localhost", h =>
-        {
-            h.Username("guest");
-            h.Password("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");
-        });
-    });
-});
+builder.Services.AddHttpContextAccessor();
 
-// Add services to the container.
-// Зчитування рядка підключення з appsettings.json
-var connectionString = builder.Configuration.GetConnectionString("ChatDatabase")
-    ?? "Server=localhost;Database=chatdb;User=root;Password=root;";
-
-builder.Services.AddDbContext<ChatDbContext>(options =>
-    options.UseMySQL(connectionString));
-
-builder.Services.AddControllers();
-builder.Services.AddHttpContextAccessor(); // Для доступу до HttpContext у сервісах
-
-// Реєстрація сервісу для роботи з чатами
-builder.Services.AddScoped<IChatService, ChatService.Services.ChatService>();
-builder.Services.AddScoped<IFolderService, FolderService>();
+// Реєструємо обробник
+builder.Services.AddTransient<InternalAuthHandler>();
 
 builder.Services.AddHttpClient("IdentityClient", client =>
 {
@@ -92,8 +78,36 @@ builder.Services.AddHttpClient("MessageClient", client =>
 })
 .AddHttpMessageHandler<InternalAuthHandler>();
 
-// Реєструємо обробник
-builder.Services.AddTransient<InternalAuthHandler>();
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("rabbitmq://localhost", h =>
+        {
+            h.Username("guest");
+            h.Password("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");
+        });
+        cfg.ConfigureEndpoints(context);
+    });
+
+    x.AddConsumer<ChatService.Consumers.MessageNotificationConsumer>();
+});
+
+// Реєстрація репозиторіїв
+builder.Services.AddScoped<IChatRoomRepository, ChatRoomRepository>();
+builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+
+// Реєстрація сервісів
+builder.Services.AddScoped<IChatService, ChatService.Services.ChatService>();
+builder.Services.AddScoped<IFolderService, FolderService>();
+
+// Реєстрація сервісу авторизації
+builder.Services.AddScoped<IChatAuthorizationService, ChatAuthorizationService>();
+
+// Реєстрація сервісу детальних дозволів
+builder.Services.AddScoped<IPermissionService<ChatPermission>, ChatPermissionService>();
+
+builder.Services.AddControllers();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -142,6 +156,8 @@ if (app.Environment.IsDevelopment())
 }
 
 // Налаштування middleware
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseRouting();
 
 app.UseHttpsRedirection();
