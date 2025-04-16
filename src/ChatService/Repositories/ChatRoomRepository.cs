@@ -234,7 +234,7 @@ namespace ChatService.Repositories
                 if (chat == null)
                 {
                     _logger.LogWarning("Спроба видалити неіснуючий приватний чат {ChatId}", chatRoomId);
-                    return false;
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
                 }
 
                 _context.PrivateChatRooms.Remove(chat);

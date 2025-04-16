@@ -5,13 +5,27 @@ using MassTransit;
 using MessageService.Consumers;
 using MessageService.Data;
 using MessageService.Hubs;
+using MessageService.Repositories.Interfaces;
+using MessageService.Repositories;
 using MessageService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using MessageService.Authorization;
+using MessageService.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<MessageDbContext>(options =>
+    options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
+
+// Реєструємо наш сервіс для роботи з повідомленнями
+builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
+builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IMessageAuthorizationService, MessageAuthorizationService>();
+
+builder.Services.AddSingleton<IEncryptionGrpcClient, EncryptionGrpcClient>();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -55,18 +69,6 @@ builder.Services.AddMassTransit(x =>
 });
 
 builder.Services.AddSignalR();
-
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("MessageDatabase")
-    ?? "Server=localhost;Database=messagedb;User=root;Password=root;";
-
-builder.Services.AddDbContext<MessageDbContext>(options =>
-    options.UseMySQL(connectionString));
-
-builder.Services.AddControllers();
-
-// Реєструємо наш сервіс для роботи з повідомленнями
-builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
 
 builder.Services.AddHttpClient("EncryptionClient", client =>
 {
@@ -151,6 +153,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Настройка middleware
 app.UseRouting();

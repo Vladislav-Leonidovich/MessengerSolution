@@ -32,10 +32,9 @@ namespace EncryptionService.Middleware
 
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            HttpStatusCode statusCode = HttpStatusCode.InternalServerError; // 500 по умолчанию
+            HttpStatusCode statusCode = HttpStatusCode.InternalServerError;
             string errorMessage = "Сталася внутрішня помилка сервера.";
 
-            // Определяем тип исключения и соответствующий статус-код
             switch (exception)
             {
                 case UnauthorizedAccessException:
@@ -71,7 +70,7 @@ namespace EncryptionService.Middleware
                 {
                     message = errorMessage,
                     detail = exception.Message,
-                    // В Production не возвращаем стек-трейс
+                    // У Production не повертаємо стек-трейс
                     stackTrace = context.Request.Host.Host.Contains("localhost") ? exception.StackTrace : null
                 }
             };

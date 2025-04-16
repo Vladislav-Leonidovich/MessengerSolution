@@ -61,7 +61,7 @@ namespace ChatService.Services
             catch (ForbiddenAccessException ex)
             {
                 _logger.LogWarning(ex.Message);
-                throw; // Пробрасываем исключение, чтобы middleware вернул 403
+                throw;
             }
             catch (Exception ex)
             {

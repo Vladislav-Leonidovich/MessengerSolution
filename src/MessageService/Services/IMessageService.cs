@@ -1,20 +1,21 @@
 ﻿using MessageServiceDTOs;
 using MessageService.Models;
+using Shared.Responses;
 
 namespace MessageService.Services
 {
     public interface IMessageService
     {
         // Зберігає повідомлення, передане клієнтом
-        Task<MessageDto> SendMessageAsync(SendMessageDto model);
+        Task<ApiResponse<MessageDto>> SendMessageAsync(SendMessageDto model, int userId);
 
         // Отримує список повідомлень для зазначеного чату з підтримкою пагінації
-        Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int startIndex, int count);
-        Task<MessageDto> MarkMessageAsRead(int messageId);
-        Task<MessageDto> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId);
-        Task<bool> DeleteMessageAsync(int messageId);
-        Task<bool> DeleteMessagesByChatRoomIdAsync(int chatRoomId);
-        Task<ulong> GetMessagesCountByChatRoomIdAsync(int chatRoomId);
+        Task<ApiResponse<IEnumerable<MessageDto>>> GetMessagesAsync(int chatRoomId, int startIndex, int count, int userId);
+        Task<ApiResponse<MessageDto>> MarkMessageAsRead(int messageId);
+        Task<ApiResponse<MessageDto>> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId);
+        Task<ApiResponse<bool>> DeleteMessageAsync(int messageId);
+        Task<ApiResponse<bool>> DeleteMessagesByChatRoomIdAsync(int chatRoomId);
+        Task<ApiResponse<int>> GetMessagesCountByChatRoomIdAsync(int chatRoomId);
         Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId);
     }
 }

@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using EncryptionService.GrpcServices;
 using EncryptionService.Middleware;
 using EncryptionService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -80,6 +81,8 @@ app.UseRouting();
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+app.MapGrpcService<EncryptionGrpcServiceImpl>();
 
 app.MapControllers();
 
