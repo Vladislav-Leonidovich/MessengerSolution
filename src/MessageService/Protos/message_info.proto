@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option csharp_namespace = "MessageService.Protos";
+
+package message.info;
+
+import "google/protobuf/timestamp.proto";
+
+service MessageInfoService {
+  rpc GetLastMessage (LastMessageRequest) returns (MessageData);
+  rpc GetLastMessagesBatch (LastMessagesBatchRequest) returns (LastMessagesBatchResponse);
+}
+
+message LastMessageRequest {
+  int32 chat_room_id = 1;
+}
+
+message MessageData {
+  int32 id = 1;
+  int32 chat_room_id = 2;
+  int32 sender_user_id = 3;
+  string content = 4;
+  google.protobuf.Timestamp created_at = 5;
+  bool is_read = 6;
+  optional google.protobuf.Timestamp read_at = 7;
+  bool is_edited = 8;
+  optional google.protobuf.Timestamp edited_at = 9;
+  int32 chat_room_type = 10;
+}
+
+message LastMessagesBatchRequest {
+  repeated int32 chat_room_ids = 1;
+}
+
+message LastMessagesBatchResponse {
+  map<int32, MessageData> messages = 1;
+}

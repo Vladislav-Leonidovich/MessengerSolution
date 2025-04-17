@@ -2,7 +2,7 @@
 using ChatService.Models;
 using Shared.Responses;
 
-namespace ChatService.Services
+namespace ChatService.Services.Interfaces
 {
     public interface IChatService
     {

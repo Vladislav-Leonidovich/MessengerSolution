@@ -16,6 +16,7 @@ using ChatService.Authorization;
 using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
 using Shared.Responses;
+using ChatService.Services.Interfaces;
 
 namespace ChatService.Services
 {
@@ -111,7 +112,7 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+                    await _bus.Publish(new ChatEvents { ChatRoomId = chatRoomId });
 
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
@@ -274,7 +275,7 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+                    await _bus.Publish(new ChatEvents { ChatRoomId = chatRoomId });
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
                 return ApiResponse<bool>.Fail("Не вдалося видалити чат");

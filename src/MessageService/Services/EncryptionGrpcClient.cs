@@ -8,6 +8,7 @@ using Polly;
 using Polly.Retry;
 using Polly.CircuitBreaker;
 using System.Net.Http;
+using MessageService.Services.Interfaces;
 
 namespace MessageService.Services
 {

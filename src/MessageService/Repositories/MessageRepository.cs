@@ -2,7 +2,7 @@
 using MessageService.Data;
 using MessageService.Models;
 using MessageService.Repositories.Interfaces;
-using MessageService.Services;
+using MessageService.Services.Interfaces;
 using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using Shared.Exceptions;

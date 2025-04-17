@@ -6,7 +6,7 @@ using Shared.Contracts;
 
 namespace MessageService.Consumers
 {
-    public class MessageCreatedEventConsumer : IConsumer<MessageCreatedEvent>
+    public class MessageCreatedEventConsumer : IConsumer<MessageEvents>
     {
         private readonly IHubContext<MessageHub> _hubContext;
         private readonly ILogger<MessageCreatedEventConsumer> _logger;
@@ -17,7 +17,7 @@ namespace MessageService.Consumers
             _logger = logger;
         }
 
-        public async Task Consume(ConsumeContext<MessageCreatedEvent> context)
+        public async Task Consume(ConsumeContext<MessageEvents> context)
         {
             var message = context.Message;
             _logger.LogInformation("Получено событие MessageCreatedEvent для чата {ChatRoomId}", message.ChatRoomId);

@@ -2,7 +2,7 @@
 using MessageService.Models;
 using Shared.Responses;
 
-namespace MessageService.Services
+namespace MessageService.Services.Interfaces
 {
     public interface IMessageService
     {

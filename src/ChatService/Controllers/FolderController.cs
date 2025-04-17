@@ -1,10 +1,10 @@
 ﻿using ChatServiceDTOs.Folders;
-using ChatService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ChatService.Attributes;
 using System.Security.Claims;
 using Shared.Authorization.Permissions;
+using ChatService.Services.Interfaces;
 
 namespace ChatService.Controllers
 {

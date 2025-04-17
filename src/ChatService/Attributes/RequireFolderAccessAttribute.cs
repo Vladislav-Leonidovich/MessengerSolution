@@ -49,7 +49,7 @@ namespace ChatService.Attributes
                 }
 
                 // Перевіряємо доступ
-                if (!await _authService.CanAccessFolder(userId, folderId))
+                if (!await _authService.CanAccessFolderAsync(userId, folderId))
                 {
                     _logger.LogWarning(
                         "Користувачу {UserId} відмовлено в доступі до папки {FolderId}",

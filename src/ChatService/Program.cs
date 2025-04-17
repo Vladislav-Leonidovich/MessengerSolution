@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Shared.Authorization.Permissions;
 using Shared.Authorization;
+using ChatService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -107,6 +108,8 @@ builder.Services.AddScoped<IChatAuthorizationService, ChatAuthorizationService>(
 // Реєстрація сервісу детальних дозволів
 builder.Services.AddScoped<IPermissionService<ChatPermission>, ChatPermissionService>();
 
+builder.Services.AddGrpc();
+
 builder.Services.AddControllers();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -138,6 +141,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+app.MapGrpcService<ChatAuthorizationGrpcService>();
 
 app.UseCors("AllowAll");
 

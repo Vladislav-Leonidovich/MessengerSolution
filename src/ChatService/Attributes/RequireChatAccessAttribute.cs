@@ -49,7 +49,7 @@ namespace ChatService.Attributes
                 }
 
                 // Перевіряємо доступ
-                if (!await _authService.CanAccessChatRoom(userId, chatRoomId))
+                if (!await _authService.CanAccessChatRoomAsync(userId, chatRoomId))
                 {
                     _logger.LogWarning(
                         "Користувачу {UserId} відмовлено в доступі до чату {ChatRoomId}",

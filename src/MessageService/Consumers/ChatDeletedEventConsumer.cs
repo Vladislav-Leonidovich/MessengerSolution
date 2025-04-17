@@ -2,11 +2,11 @@
 using MessageService.Data;
 using Microsoft.EntityFrameworkCore;
 using Shared.Contracts;
-using MessageService.Services;
+using MessageService.Services.Interfaces;
 
 namespace ChatService.Consumers
 {
-    public class ChatDeletedEventConsumer : IConsumer<ChatDeletedEvent>
+    public class ChatDeletedEventConsumer : IConsumer<ChatEvents>
     {
         private readonly MessageDbContext _context;
         private readonly IMessageService _messageService;
@@ -17,7 +17,7 @@ namespace ChatService.Consumers
             _messageService = messageService;
         }
 
-        public async Task Consume(ConsumeContext<ChatDeletedEvent> context)
+        public async Task Consume(ConsumeContext<ChatEvents> context)
         {
             var chatRoomId = context.Message.ChatRoomId;
             var IsAuthUser = await _messageService.IsAuthUserInChatRoomsAsync(chatRoomId);

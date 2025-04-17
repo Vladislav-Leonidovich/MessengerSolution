@@ -1,4 +1,4 @@
-﻿namespace MessageService.Services
+﻿namespace MessageService.Services.Interfaces
 {
     public interface IEncryptionGrpcClient : IDisposable
     {

@@ -12,6 +12,7 @@ using MessageService.Repositories.Interfaces;
 using Shared.Exceptions;
 using MessageService.Authorization;
 using Shared.Responses;
+using MessageService.Services.Interfaces;
 
 namespace MessageService.Services
 {

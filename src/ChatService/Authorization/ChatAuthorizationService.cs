@@ -15,7 +15,7 @@ namespace ChatService.Authorization
             _logger = logger;
         }
 
-        public async Task<bool> CanAccessChatRoom(int userId, int chatRoomId)
+        public async Task<bool> CanAccessChatRoomAsync(int userId, int chatRoomId)
         {
             _logger.LogInformation("Перевірка доступу до чату {ChatRoomId} для користувача {UserId}", chatRoomId, userId);
 
@@ -32,9 +32,9 @@ namespace ChatService.Authorization
             return isGroupChatMember;
         }
 
-        public async Task EnsureCanAccessChatRoom(int userId, int chatRoomId)
+        public async Task EnsureCanAccessChatRoomAsync(int userId, int chatRoomId)
         {
-            if (!await CanAccessChatRoom(userId, chatRoomId))
+            if (!await CanAccessChatRoomAsync(userId, chatRoomId))
             {
                 _logger.LogWarning("Відмовлено в доступі до чату {ChatRoomId} для користувача {UserId}",
                     chatRoomId, userId);
@@ -43,15 +43,15 @@ namespace ChatService.Authorization
             }
         }
 
-        public async Task<bool> CanAccessFolder(int userId, int folderId)
+        public async Task<bool> CanAccessFolderAsync(int userId, int folderId)
         {
             return await _context.Folders
                 .AnyAsync(f => f.Id == folderId && f.UserId == userId);
         }
 
-        public async Task EnsureCanAccessFolder(int userId, int folderId)
+        public async Task EnsureCanAccessFolderAsync(int userId, int folderId)
         {
-            if (!await CanAccessFolder(userId, folderId))
+            if (!await CanAccessFolderAsync(userId, folderId))
             {
                 _logger.LogWarning("Відмовлено в доступі до папки {FolderId} для користувача {UserId}",
                     folderId, userId);
@@ -60,7 +60,7 @@ namespace ChatService.Authorization
             }
         }
 
-        public async Task<bool> CanModifyChat(int userId, int chatRoomId)
+        public async Task<bool> CanModifyChatAsync(int userId, int chatRoomId)
         {
             // Перевіряємо, чи є користувач власником групового чату
             var groupChat = await _context.GroupChatRooms
@@ -72,10 +72,10 @@ namespace ChatService.Authorization
             }
 
             // Для приватних чатів - перевіряємо участь
-            return await CanAccessChatRoom(userId, chatRoomId);
+            return await CanAccessChatRoomAsync(userId, chatRoomId);
         }
 
-        public async Task<bool> CanAddUserToChat(int userId, int chatRoomId, int targetUserId)
+        public async Task<bool> CanAddUserToChatAsync(int userId, int chatRoomId, int targetUserId)
         {
             // Тільки власник або адмін може додавати користувачів
             var groupChat = await _context.GroupChatRooms

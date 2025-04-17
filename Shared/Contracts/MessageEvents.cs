@@ -14,11 +14,21 @@ namespace Shared.Contracts
         public int ChatRoomId { get; set; }
         public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
-        public string Content { get; set; } = null!;
+        public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
-        public bool IsRead { get; set; } = false;
+        public bool IsRead { get; set; }
         public DateTime? ReadAt { get; set; }
-        public bool IsEdited { get; set; } = false;
+        public bool IsEdited { get; set; }
+        public DateTime? EditedAt { get; set; }
+    }
+
+    public class MessageUpdatedEvent
+    {
+        public int Id { get; set; }
+        public int ChatRoomId { get; set; }
+        public bool IsRead { get; set; }
+        public DateTime? ReadAt { get; set; }
+        public bool IsEdited { get; set; }
         public DateTime? EditedAt { get; set; }
     }
 }

@@ -8,6 +8,7 @@ using ChatService.Authorization;
 using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
 using Shared.Responses;
+using ChatService.Services.Interfaces;
 
 namespace ChatService.Services
 {

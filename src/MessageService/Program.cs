@@ -14,18 +14,21 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MessageService.Authorization;
 using MessageService.Middleware;
+using MessageService.Services.Interfaces;
+using Shared.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<MessageDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 
-// Реєструємо наш сервіс для роботи з повідомленнями
 builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IMessageAuthorizationService, MessageAuthorizationService>();
 
 builder.Services.AddSingleton<IEncryptionGrpcClient, EncryptionGrpcClient>();
+builder.Services.AddSingleton<IChatGrpcClient, ChatGrpcClient>();
+builder.Services.AddMemoryCache();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -34,6 +37,8 @@ builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<MessageCreatedEventConsumer>();
     x.AddConsumer<ChatDeletedEventConsumer>();
+    x.AddConsumer<MessageUpdatedEventConsumer>();
+    x.AddConsumer<ChatAccessChangedEventConsumer>();
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host("rabbitmq://localhost", h =>
@@ -42,29 +47,17 @@ builder.Services.AddMassTransit(x =>
             h.Password("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");
         });
 
-        cfg.ReceiveEndpoint("message-service-message-created", e =>
+        cfg.ReceiveEndpoint("message-events-queue", e =>
         {
-            // Спочатку вказуємо властивості черги
-            e.Durable = true;       // Черга переживе перезапуск RabbitMQ
-            e.AutoDelete = false;   // Черга не видалиться сама при відключенні
-            e.PrefetchCount = 10;
-
-            // Потім підключаємо споживача
             e.ConfigureConsumer<MessageCreatedEventConsumer>(context);
+            e.ConfigureConsumer<MessageUpdatedEventConsumer>(context);
         });
 
-        cfg.ReceiveEndpoint("message-service-chat-deleted", e =>
+        cfg.ReceiveEndpoint("chat-events-queue", e =>
         {
-            // Спочатку вказуємо властивості черги
-            e.Durable = true;       // Черга переживе перезапуск RabbitMQ
-            e.AutoDelete = false;   // Черга не видалиться сама при відключенні
-            e.PrefetchCount = 10;
-
-            // Потім підключаємо споживача
             e.ConfigureConsumer<ChatDeletedEventConsumer>(context);
+            e.ConfigureConsumer<ChatAccessChangedEventConsumer>(context);
         });
-
-        cfg.UseMessageRetry(r => r.Incremental(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
     });
 });
 

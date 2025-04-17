@@ -1,7 +1,7 @@
 ﻿using MessageServiceDTOs;
-using MessageService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using MessageService.Services.Interfaces;
 
 namespace MessageService.Controllers
 {

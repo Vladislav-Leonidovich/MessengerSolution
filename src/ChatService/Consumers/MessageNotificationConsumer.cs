@@ -4,9 +4,9 @@ using Shared.Contracts;
 namespace ChatService.Consumers
 {
     // Споживач події створення повідомлення
-    public class MessageNotificationConsumer : IConsumer<MessageCreatedEvent>
+    public class MessageNotificationConsumer : IConsumer<MessageEvents>
     {
-        public async Task Consume(ConsumeContext<MessageCreatedEvent> context)
+        public async Task Consume(ConsumeContext<MessageEvents> context)
         {
             var messageEvent = context.Message;
             // Реалізуйте логіку, наприклад, оновлення стану чату, розсилку сповіщень тощо.
