@@ -1,6 +1,6 @@
 ﻿using Grpc.Net.Client;
 using Polly;
-using ChatService.Protos;
+using Shared.Protos;
 using MessageService.Services.Interfaces;
 
 namespace MessageService.Services

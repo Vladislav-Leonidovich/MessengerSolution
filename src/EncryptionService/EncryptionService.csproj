@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-  	<Protobuf Include="Protos\encryption.proto" GrpcServices="Server" />
+    <Protobuf Include="..\..\Shared\Protos\encryption.proto" GrpcServices="Server" />
   </ItemGroup>
 
 </Project>

@@ -6,6 +6,12 @@ using System.Threading.Tasks;
 
 namespace Shared.Contracts
 {
+    public abstract class ChatEventBase
+    {
+        public Guid EventId { get; set; } = Guid.NewGuid();
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
     public class ChatDeletedEvent
     {
         public int ChatRoomId { get; set; }

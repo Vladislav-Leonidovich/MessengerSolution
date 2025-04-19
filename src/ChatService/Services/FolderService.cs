@@ -47,7 +47,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessFolder(userId, folderId);
+                await _authService.EnsureCanAccessFolderAsync(userId, folderId);
 
                 var folder = await _folderRepository.GetFolderByIdAsync(folderId);
                 if (folder == null)
@@ -104,7 +104,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessFolder(userId, folderDto.Id);
+                await _authService.EnsureCanAccessFolderAsync(userId, folderDto.Id);
                 // Валідація даних
                 if (string.IsNullOrWhiteSpace(folderDto.Name))
                 {
@@ -130,7 +130,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessFolder(userId, folderId);
+                await _authService.EnsureCanAccessFolderAsync(userId, folderId);
                 var result = await _folderRepository.DeleteFolderAsync(folderId);
                 return ApiResponse<bool>.Ok(result, "Папку успішно видалено");
             }
@@ -156,9 +156,9 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу до папки
-                await _authService.EnsureCanAccessFolder(userId, folderId);
+                await _authService.EnsureCanAccessFolderAsync(userId, folderId);
                 // Перевірка доступу до чату
-                if (!await _authService.CanAccessChatRoom(userId, chatId))
+                if (!await _authService.CanAccessChatRoomAsync(userId, chatId))
                 {
                     throw new ForbiddenAccessException($"У вас немає доступу до чату з ID {chatId}");
                 }
@@ -182,7 +182,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу до чату
-                if (!await _authService.CanAccessChatRoom(userId, chatId))
+                if (!await _authService.CanAccessChatRoomAsync(userId, chatId))
                 {
                     throw new ForbiddenAccessException($"У вас немає доступу до чату з ID {chatId}");
                 }

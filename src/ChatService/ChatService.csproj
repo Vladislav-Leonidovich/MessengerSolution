@@ -35,7 +35,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Protobuf Include="Protos/*.proto" GrpcServices="Server" />
+		<Protobuf Include="..\..\Shared\Protos\message_info.proto" GrpcServices="Client" />
+		<Protobuf Include="..\..\Shared\Protos\chat_authorization.proto" GrpcServices="Server" />
 	</ItemGroup>
 
 </Project>

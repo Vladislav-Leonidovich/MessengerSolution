@@ -1,5 +1,5 @@
 ﻿using Grpc.Net.Client;
-using EncryptionService.Protos;
+using Shared.Protos;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,8 @@ using Polly.Retry;
 using Polly.CircuitBreaker;
 using System.Net.Http;
 using MessageService.Services.Interfaces;
+using Grpc.Core;
+using Shared.Exceptions;
 
 namespace MessageService.Services
 {
@@ -91,9 +93,24 @@ namespace MessageService.Services
                     return response.CipherText;
                 });
             }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
+            {
+                _logger.LogError(ex, "Сервіс шифрування недоступний");
+                throw new ServiceUnavailableException("Сервіс шифрування тимчасово недоступний", ex);
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unauthenticated)
+            {
+                _logger.LogError(ex, "Помилка аутентифікації під час виклику сервісу шифрування");
+                throw new ForbiddenAccessException("Помилка аутентифікації під час доступу до сервісу шифрування");
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "gRPC помилка під час шифрування: {StatusCode}", ex.StatusCode);
+                throw new ApplicationException($"Помилка обробки запиту: {ex.Status.Detail}", ex);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Не вдалося зашифрувати повідомлення");
+                _logger.LogError(ex, "Несподівана помилка під час шифрування");
                 throw;
             }
         }
@@ -117,9 +134,24 @@ namespace MessageService.Services
                     return response.PlainText;
                 });
             }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
+            {
+                _logger.LogError(ex, "Сервіс шифрування недоступний");
+                throw new ServiceUnavailableException("Сервіс шифрування тимчасово недоступний", ex);
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unauthenticated)
+            {
+                _logger.LogError(ex, "Помилка аутентифікації під час виклику сервісу шифрування");
+                throw new ForbiddenAccessException("Помилка аутентифікації під час доступу до сервісу шифрування");
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "gRPC помилка під час шифрування: {StatusCode}", ex.StatusCode);
+                throw new ApplicationException($"Помилка обробки запиту: {ex.Status.Detail}", ex);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Не вдалося дешифрувати повідомлення");
+                _logger.LogError(ex, "Несподівана помилка під час дешифрування");
                 throw;
             }
         }
@@ -143,9 +175,24 @@ namespace MessageService.Services
                     return response.CipherTexts.ToList();
                 });
             }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
+            {
+                _logger.LogError(ex, "Сервіс шифрування недоступний");
+                throw new ServiceUnavailableException("Сервіс шифрування тимчасово недоступний", ex);
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unauthenticated)
+            {
+                _logger.LogError(ex, "Помилка аутентифікації під час виклику сервісу шифрування");
+                throw new ForbiddenAccessException("Помилка аутентифікації під час доступу до сервісу шифрування");
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "gRPC помилка під час шифрування: {StatusCode}", ex.StatusCode);
+                throw new ApplicationException($"Помилка обробки запиту: {ex.Status.Detail}", ex);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Не вдалося виконати пакетне шифрування повідомлень");
+                _logger.LogError(ex, "Несподівана помилка під час пакетного шифрування");
                 throw;
             }
         }
@@ -169,9 +216,24 @@ namespace MessageService.Services
                     return response.PlainTexts.ToList();
                 });
             }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
+            {
+                _logger.LogError(ex, "Сервіс шифрування недоступний");
+                throw new ServiceUnavailableException("Сервіс шифрування тимчасово недоступний", ex);
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unauthenticated)
+            {
+                _logger.LogError(ex, "Помилка аутентифікації під час виклику сервісу шифрування");
+                throw new ForbiddenAccessException("Помилка аутентифікації під час доступу до сервісу шифрування");
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "gRPC помилка під час шифрування: {StatusCode}", ex.StatusCode);
+                throw new ApplicationException($"Помилка обробки запиту: {ex.Status.Detail}", ex);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Не вдалося виконати пакетне дешифрування повідомлень");
+                _logger.LogError(ex, "Несподівана помилка під час пакетного дешифрування");
                 throw;
             }
         }

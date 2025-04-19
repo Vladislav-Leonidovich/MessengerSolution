@@ -1,60 +1,46 @@
 ﻿using MassTransit;
+using MessageService.Data;
 using MessageService.Hubs;
 using MessageServiceDTOs;
 using Microsoft.AspNetCore.SignalR;
+using Shared.Consumers;
 using Shared.Contracts;
 
 namespace MessageService.Consumers
 {
-    public class MessageCreatedEventConsumer : IConsumer<MessageEvents>
+    public class MessageCreatedEventConsumer : IdempotentConsumer<MessageCreatedEvent>
     {
         private readonly IHubContext<MessageHub> _hubContext;
-        private readonly ILogger<MessageCreatedEventConsumer> _logger;
 
-        public MessageCreatedEventConsumer(IHubContext<MessageHub> hubContext, ILogger<MessageCreatedEventConsumer> logger)
+        public MessageCreatedEventConsumer(
+            MessageDbContext dbContext,
+            IHubContext<MessageHub> hubContext,
+            ILogger<MessageCreatedEventConsumer> logger)
+            : base(dbContext, logger)
         {
             _hubContext = hubContext;
-            _logger = logger;
         }
 
-        public async Task Consume(ConsumeContext<MessageEvents> context)
+        protected override async Task ProcessEventAsync(MessageCreatedEvent @event)
         {
-            var message = context.Message;
-            _logger.LogInformation("Получено событие MessageCreatedEvent для чата {ChatRoomId}", message.ChatRoomId);
-
-            try
+            // Конвертируем событие в DTO для отправки клиентам
+            var messageDto = new MessageDto
             {
-                // Конвертируем событие в DTO для отправки клиентам
-                var messageDto = new MessageDto
-                {
-                    Id = message.Id,
-                    ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
-                    SenderUserId = message.SenderUserId,
-                    Content = message.Content,
-                    CreatedAt = message.CreatedAt,
-                    IsRead = message.IsRead,
-                    ReadAt = message.ReadAt,
-                    IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
-                };
+                Id = @event.Id,
+                ChatRoomId = @event.ChatRoomId,
+                ChatRoomType = @event.ChatRoomType,
+                SenderUserId = @event.SenderUserId,
+                Content = @event.Content,
+                CreatedAt = @event.CreatedAt,
+                IsRead = @event.IsRead,
+                ReadAt = @event.ReadAt,
+                IsEdited = @event.IsEdited,
+                EditedAt = @event.EditedAt
+            };
 
-                // ВАЖНО: группа должна точно соответствовать ID чата
-                string groupName = message.ChatRoomId.ToString();
-
-                _logger.LogInformation("Отправка сообщения в группу {GroupName}", groupName);
-
-                // Отправка в группу
-                await _hubContext.Clients
-                    .Group(groupName)
-                    .SendAsync("ReceiveMessage", messageDto);
-
-                _logger.LogInformation("Сообщение успешно отправлено в группу {GroupName}", groupName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка отправки сообщения в группу {ChatRoomId}", message.ChatRoomId);
-            }
+            // Отправка в группу
+            string groupName = @event.ChatRoomId.ToString();
+            await _hubContext.Clients.Group(groupName).SendAsync("ReceiveMessage", messageDto);
         }
     }
 }

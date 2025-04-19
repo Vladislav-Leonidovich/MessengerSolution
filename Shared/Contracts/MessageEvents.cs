@@ -7,8 +7,14 @@ using MessageServiceDTOs;
 
 namespace Shared.Contracts
 {
+    public abstract class MessageEventBase
+    {
+        public Guid EventId { get; set; } = Guid.NewGuid();
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
     // Контракт події, який публікується при створенні нового повідомлення
-    public class MessageCreatedEvent
+    public class MessageCreatedEvent : MessageEventBase
     {
         public int Id { get; set; }
         public int ChatRoomId { get; set; }
@@ -22,7 +28,7 @@ namespace Shared.Contracts
         public DateTime? EditedAt { get; set; }
     }
 
-    public class MessageUpdatedEvent
+    public class MessageUpdatedEvent : MessageEventBase
     {
         public int Id { get; set; }
         public int ChatRoomId { get; set; }
@@ -30,5 +36,13 @@ namespace Shared.Contracts
         public DateTime? ReadAt { get; set; }
         public bool IsEdited { get; set; }
         public DateTime? EditedAt { get; set; }
+    }
+
+    public class MessageDeletedEvent : MessageEventBase
+    {
+        public int Id { get; set; }
+        public int ChatRoomId { get; set; }
+        public int DeletedByUserId { get; set; }
+        public DateTime DeletedAt { get; set; }
     }
 }

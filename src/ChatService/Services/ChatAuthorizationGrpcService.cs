@@ -1,10 +1,12 @@
 ﻿using ChatService.Authorization;
-using ChatService.Protos;
+using Shared.Protos;
 using Grpc.Core;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ChatService.Services
 {
-    public class ChatAuthorizationGrpcService : Protos.ChatAuthorizationService.ChatAuthorizationServiceBase
+    [Authorize]
+    public class ChatAuthorizationGrpcService : ChatAuthorizationService.ChatAuthorizationServiceBase
     {
         private readonly IChatAuthorizationService _authService;
         private readonly ILogger<ChatAuthorizationGrpcService> _logger;

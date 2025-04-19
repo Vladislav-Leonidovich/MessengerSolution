@@ -44,7 +44,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessChatRoom(userId, chatRoomId);
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 var chat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
                 if (chat == null)
@@ -104,7 +104,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessChatRoom(userId, chatRoomId);
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 // Видалення чату
                 var result = await _chatRoomRepository.DeletePrivateChatAsync(chatRoomId);
@@ -155,7 +155,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessChatRoom(userId, chatRoomId);
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
                 var chat = await _chatRoomRepository.GetGroupChatByIdAsync(chatRoomId);
                 if (chat == null)
                 {
@@ -269,7 +269,7 @@ namespace ChatService.Services
             try
             {
                 // Перевірка доступу
-                await _authService.EnsureCanAccessChatRoom(userId, chatRoomId);
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
                 // Видалення чату
                 var result = await _chatRoomRepository.DeleteGroupChatAsync(chatRoomId);
                 if (result)

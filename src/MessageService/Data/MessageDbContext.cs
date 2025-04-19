@@ -13,6 +13,7 @@ namespace MessageService.Data
 
         // Таблица сообщений
         public DbSet<Message> Messages { get; set; }
+        public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
         // При необходимости можно переопределить OnModelCreating для дополнительной конфигурации моделей
         protected override void OnModelCreating(ModelBuilder modelBuilder)

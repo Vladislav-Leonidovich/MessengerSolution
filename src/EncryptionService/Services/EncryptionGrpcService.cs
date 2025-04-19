@@ -1,11 +1,11 @@
-﻿using EncryptionService.Protos;
+﻿using Shared.Protos;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
 
 namespace EncryptionService.Services
 {
     [Authorize]
-    public class EncryptionGrpcService : Protos.EncryptionGrpcService.EncryptionGrpcServiceBase
+    public class EncryptionGrpcService : Shared.Protos.EncryptionGrpcService.EncryptionGrpcServiceBase
     {
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<EncryptionGrpcService> _logger;

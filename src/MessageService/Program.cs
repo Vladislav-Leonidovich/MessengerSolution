@@ -16,6 +16,9 @@ using MessageService.Authorization;
 using MessageService.Middleware;
 using MessageService.Services.Interfaces;
 using Shared.Contracts;
+using Shared.Interceptors;
+using Shared.Protos;
+using MessageService.BackgroundServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,10 +28,47 @@ builder.Services.AddDbContext<MessageDbContext>(options =>
 builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IMessageAuthorizationService, MessageAuthorizationService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
+builder.Services.AddHostedService<OutboxProcessorService>();
 
 builder.Services.AddSingleton<IEncryptionGrpcClient, EncryptionGrpcClient>();
 builder.Services.AddSingleton<IChatGrpcClient, ChatGrpcClient>();
 builder.Services.AddMemoryCache();
+
+builder.Services.AddGrpcClient<EncryptionGrpcService.EncryptionGrpcServiceClient>(o =>
+{
+    o.Address = new Uri(builder.Configuration["Services:EncryptionService:GrpcUrl"]);
+})
+.AddInterceptor(provider =>
+{
+    var tokenService = provider.GetRequiredService<ITokenService>();
+    var logger = provider.GetRequiredService<ILogger<AuthGrpcInterceptor>>();
+
+    // Создаем функцию-провайдер токена
+    Func<Task<string>> tokenProvider = async () => await tokenService.GetTokenAsync();
+
+    // Создаем и возвращаем перехватчик
+    return new AuthGrpcInterceptor(tokenProvider, logger);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new SocketsHttpHandler
+    {
+        EnableMultipleHttp2Connections = true,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
+    };
+
+    // Настройка проверки SSL через SslOptions
+    handler.SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+    {
+        // Отключает проверку сертификатов (только для разработки!)
+        RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true
+    };
+
+    return handler;
+});
 
 builder.Services.AddHttpContextAccessor();
 

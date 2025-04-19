@@ -61,6 +61,12 @@ namespace MessageService.Middleware
                     _logger.LogWarning(ex, "Помилка валідації даних");
                     break;
 
+                case ServiceUnavailableException ex:
+                    statusCode = HttpStatusCode.ServiceUnavailable;
+                    errorMessage = ex.Message;
+                    _logger.LogWarning(ex, "Сервіс недоступний");
+                    break;
+
                 case DatabaseException ex:
                     _logger.LogError(ex, "Помилка бази даних");
                     break;
