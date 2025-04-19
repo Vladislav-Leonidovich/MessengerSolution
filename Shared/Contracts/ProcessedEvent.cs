@@ -1,4 +1,4 @@
-﻿namespace Shared.Consumers
+﻿namespace Shared.Contracts
 {
     public class ProcessedEvent
     {
