@@ -5,6 +5,7 @@ using MessageService.Repositories.Interfaces;
 using MessageService.Services.Interfaces;
 using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
+using Shared.Contracts;
 using Shared.Exceptions;
 
 namespace MessageService.Repositories

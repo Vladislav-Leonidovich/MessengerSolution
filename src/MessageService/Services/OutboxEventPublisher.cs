@@ -33,9 +33,8 @@ namespace MessageService.Services
             };
 
             _dbContext.Set<OutboxMessage>().Add(outboxMessage);
-            await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Подія {EventType} з ID {EventId} збережена в Outbox",
+            _logger.LogInformation("Подія {EventType} з ID {EventId} додана до Outbox (очікує збереження)",
                 eventType, outboxMessage.Id);
         }
     }

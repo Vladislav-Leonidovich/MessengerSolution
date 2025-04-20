@@ -1,7 +1,9 @@
 ﻿using System.Text.Json;
 using MassTransit;
+using MessageService.Data;
 using MessageService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Shared.Contracts;
 
 namespace MessageService.BackgroundServices
@@ -24,7 +26,10 @@ namespace MessageService.BackgroundServices
         {
             _logger.LogInformation("Outbox Processor Service запущений");
 
-            while (!stoppingToken.IsCancellationRequested)
+            using var timer = new PeriodicTimer(_pollingInterval);
+
+            while (!stoppingToken.IsCancellationRequested &&
+           await timer.WaitForNextTickAsync(stoppingToken))
             {
                 try
                 {
@@ -34,8 +39,6 @@ namespace MessageService.BackgroundServices
                 {
                     _logger.LogError(ex, "Помилка під час обробки Outbox повідомлень");
                 }
-
-                await Task.Delay(_pollingInterval, stoppingToken);
             }
 
             _logger.LogInformation("Outbox Processor Service зупинено");
@@ -43,42 +46,53 @@ namespace MessageService.BackgroundServices
 
         private async Task ProcessOutboxMessagesAsync(CancellationToken stoppingToken)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-            var bus = scope.ServiceProvider.GetRequiredService<IBus>();
-
-            var messages = await dbContext.Set<OutboxMessage>()
-                .Where(m => m.ProcessedAt == null && m.RetryCount < 5)
-                .OrderBy(m => m.CreatedAt)
-                .Take(50)
-                .ToListAsync(stoppingToken);
-
-            foreach (var message in messages)
+            try
             {
-                try
+                using var scope = _scopeFactory.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<MessageDbContext>(); // Тип указан конкретный
+                var bus = scope.ServiceProvider.GetRequiredService<IBus>();
+
+                var messages = await dbContext.OutboxMessages
+                    .Where(m => m.ProcessedAt == null && m.RetryCount < 5)
+                    .OrderBy(m => m.CreatedAt)
+                    .Take(50)
+                    .ToListAsync(stoppingToken);
+
+                if (messages.Any())
                 {
-                    await PublishMessageToBusAsync(bus, message, stoppingToken);
-
-                    message.ProcessedAt = DateTime.UtcNow;
-                    await dbContext.SaveChangesAsync(stoppingToken);
-
-                    _logger.LogInformation("Outbox повідомлення {MessageId} успішно оброблено", message.Id);
+                    _logger.LogInformation("Знайдено {Count} непроцесованих повідомлень в Outbox", messages.Count);
                 }
-                catch (Exception ex)
+
+                foreach (var message in messages)
                 {
-                    message.RetryCount++;
-                    message.Error = ex.Message;
-                    await dbContext.SaveChangesAsync(stoppingToken);
+                    try
+                    {
+                        await PublishMessageToBusAsync(bus, message, stoppingToken);
 
-                    _logger.LogWarning(ex, "Помилка під час обробки Outbox повідомлення {MessageId}. Спроба {RetryCount}/5",
-                        message.Id, message.RetryCount);
+                        message.ProcessedAt = DateTime.UtcNow;
+                        await dbContext.SaveChangesAsync(stoppingToken);
+
+                        _logger.LogInformation("Outbox повідомлення {MessageId} успішно оброблено", message.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        message.RetryCount++;
+                        message.Error = ex.Message;
+                        await dbContext.SaveChangesAsync(stoppingToken);
+
+                        _logger.LogWarning(ex, "Помилка під час обробки Outbox повідомлення {MessageId}. Спроба {RetryCount}/5",
+                            message.Id, message.RetryCount);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Критична помилка під час обробки Outbox повідомлень");
             }
         }
 
         private async Task PublishMessageToBusAsync(IBus bus, OutboxMessage message, CancellationToken cancellationToken)
         {
-            // Логика маппинга типов и публикации
             switch (message.EventType)
             {
                 case nameof(MessageCreatedEvent):
@@ -96,8 +110,6 @@ namespace MessageService.BackgroundServices
                         await bus.Publish(chatDeletedEvent, cancellationToken);
                     }
                     break;
-
-                // Другие типы событий...
 
                 default:
                     _logger.LogWarning("Невідомий тип події: {EventType}", message.EventType);

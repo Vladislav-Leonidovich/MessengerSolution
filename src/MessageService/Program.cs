@@ -31,6 +31,7 @@ builder.Services.AddScoped<IMessageAuthorizationService, MessageAuthorizationSer
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
 builder.Services.AddHostedService<OutboxProcessorService>();
+builder.Services.AddHostedService<OutboxCleanupService>();
 
 builder.Services.AddSingleton<IEncryptionGrpcClient, EncryptionGrpcClient>();
 builder.Services.AddSingleton<IChatGrpcClient, ChatGrpcClient>();

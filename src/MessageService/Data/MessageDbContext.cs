@@ -22,6 +22,12 @@ namespace MessageService.Data
             // Пример: можно задать индексы, ограничения, отношения и т.д.
             modelBuilder.Entity<Message>()
                 .HasIndex(m => m.ChatRoomId);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(o => o.ProcessedAt);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(o => o.CreatedAt);
         }
     }
 }

@@ -1,44 +1,37 @@
 ﻿using MassTransit;
 using MessageService.Data;
 using MessageServiceDTOs;
-using MessageService.Models;
-using Microsoft.EntityFrameworkCore;
 using Shared.Contracts;
-using EncryptionServiceDTOs;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Mvc;
-using System.Diagnostics;
 using MessageService.Repositories.Interfaces;
 using Shared.Exceptions;
 using MessageService.Authorization;
 using Shared.Responses;
 using MessageService.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace MessageService.Services
 {
     public class MessageService : IMessageService
     {
-        private readonly MessageDbContext _dbContext;
-        private readonly IBus _bus;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly MessageDbContext _context;
+        private readonly IEventPublisher _eventPublisher;
         private readonly HttpClient _chatClient;
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageAuthorizationService _authService;
 
         public MessageService(
-            MessageDbContext dbContext,
-            IPublishEndpoint publishEndpoint,
+            MessageDbContext context,
             IHttpClientFactory httpClientFactory,
             IHttpContextAccessor httpContextAccessor,
-            IBus bus, IMessageRepository messageRepository,
+            IEventPublisher eventPublisher,
+            IMessageRepository messageRepository,
             IMessageAuthorizationService authService,
             ILogger<MessageService> logger)
         {
-            _dbContext = dbContext;
-            _bus = bus;
+            _context = context;
+            _eventPublisher = eventPublisher;
             _chatClient = httpClientFactory.CreateClient("ChatClient");
-            _httpContextAccessor = httpContextAccessor;
             _messageRepository = messageRepository;
             _authService = authService;
             _logger = logger;
@@ -46,6 +39,7 @@ namespace MessageService.Services
 
         public async Task<ApiResponse<MessageDto>> SendMessageAsync(SendMessageDto model, int userId)
         {
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 await _authService.EnsureCanAccessChatRoomAsync(model.ChatRoomId, userId);
@@ -72,28 +66,42 @@ namespace MessageService.Services
                     EditedAt = messageDto.EditedAt
                 };
 
-                await _bus.Publish(eventMessage);
+                await _eventPublisher.PublishAsync(eventMessage);
 
                 return ApiResponse<MessageDto>.Ok(messageDto);
             }
             catch (EntityNotFoundException ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message);
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
+                await transaction.RollbackAsync();
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
+            }
+            catch (ValidationException ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message, ex.Errors.Values.SelectMany(e => e).ToList());
+            }
+            catch (DatabaseException ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
+                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
-                throw;
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Неочікувана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
+                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
             }
         }
+
 
         public async Task<ApiResponse<IEnumerable<MessageDto>>> GetMessagesAsync(int chatRoomId, int startIndex, int count, int userId)
         {
