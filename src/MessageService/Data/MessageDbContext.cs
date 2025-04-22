@@ -2,6 +2,7 @@
 using System.Reflection.Emit;
 using MessageService.Models;
 using Microsoft.EntityFrameworkCore;
+using Shared.Contracts;
 
 namespace MessageService.Data
 {
@@ -14,6 +15,7 @@ namespace MessageService.Data
         // Таблица сообщений
         public DbSet<Message> Messages { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
+        public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
 
         // При необходимости можно переопределить OnModelCreating для дополнительной конфигурации моделей
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -28,6 +30,12 @@ namespace MessageService.Data
 
             modelBuilder.Entity<OutboxMessage>()
                 .HasIndex(o => o.CreatedAt);
+
+            modelBuilder.Entity<ProcessedEvent>()
+                .HasKey(p => new { p.EventId, p.EventType });
+
+            modelBuilder.Entity<ProcessedEvent>()
+                .HasIndex(p => p.ProcessedAt);
         }
     }
 }

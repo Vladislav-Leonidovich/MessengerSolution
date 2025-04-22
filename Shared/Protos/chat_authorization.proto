@@ -7,6 +7,7 @@ package chat.authorization;
 service ChatAuthorizationService {
   rpc CheckAccess (CheckAccessRequest) returns (CheckAccessResponse);
   rpc CheckAccessBatch (CheckAccessBatchRequest) returns (CheckAccessBatchResponse);
+  rpc GetChatParticipants (GetChatParticipantsRequest) returns (GetChatParticipantsResponse);
 }
 
 message CheckAccessRequest {
@@ -31,4 +32,15 @@ message ChatAccessResult {
   int32 user_id = 1;
   int32 chat_room_id = 2;
   bool has_access = 3;
+}
+
+message GetChatParticipantsRequest {
+  int32 chat_room_id = 1;
+  int32 chat_room_type = 2;
+}
+
+message GetChatParticipantsResponse {
+  repeated int32 participant_ids = 1;
+  bool success = 2;
+  string error_message = 3;
 }

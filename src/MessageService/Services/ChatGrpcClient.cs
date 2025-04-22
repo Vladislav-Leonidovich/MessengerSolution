@@ -2,6 +2,7 @@
 using Polly;
 using Shared.Protos;
 using MessageService.Services.Interfaces;
+using MessageServiceDTOs;
 
 namespace MessageService.Services
 {
@@ -91,6 +92,35 @@ namespace MessageService.Services
             {
                 _logger.LogError(ex, "Помилка при пакетній перевірці доступу до чатів");
                 return checks.ToDictionary(key => key, _ => false);
+            }
+        }
+
+        public async Task<List<int>> GetChatParticipantsAsync(int chatRoomId, ChatRoomType chatRoomType)
+        {
+            try
+            {
+                var request = new GetChatParticipantsRequest
+                {
+                    ChatRoomId = chatRoomId,
+                    ChatRoomType = (int)chatRoomType
+                };
+
+                var response = await _resiliencePolicy.ExecuteAsync(async () =>
+                    await _client.GetChatParticipantsAsync(request));
+
+                if (!response.Success)
+                {
+                    _logger.LogWarning("Помилка отримання учасників чату {ChatRoomId}: {ErrorMessage}",
+                        chatRoomId, response.ErrorMessage);
+                    return new List<int>();
+                }
+
+                return response.ParticipantIds.ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні учасників чату {ChatRoomId}", chatRoomId);
+                return new List<int>();
             }
         }
 

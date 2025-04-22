@@ -8,20 +8,21 @@ using MessageService.Authorization;
 using Shared.Responses;
 using MessageService.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Shared.Sagas;
+using MessageService.Models;
+using Polly;
 
 namespace MessageService.Services
 {
     public class MessageService : IMessageService
     {
-        private readonly MessageDbContext _context;
         private readonly IEventPublisher _eventPublisher;
         private readonly HttpClient _chatClient;
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageAuthorizationService _authService;
-
+        private static int _tempMessageIdCounter = 0;
         public MessageService(
-            MessageDbContext context,
             IHttpClientFactory httpClientFactory,
             IHttpContextAccessor httpContextAccessor,
             IEventPublisher eventPublisher,
@@ -29,7 +30,6 @@ namespace MessageService.Services
             IMessageAuthorizationService authService,
             ILogger<MessageService> logger)
         {
-            _context = context;
             _eventPublisher = eventPublisher;
             _chatClient = httpClientFactory.CreateClient("ChatClient");
             _messageRepository = messageRepository;
@@ -39,7 +39,6 @@ namespace MessageService.Services
 
         public async Task<ApiResponse<MessageDto>> SendMessageAsync(SendMessageDto model, int userId)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 await _authService.EnsureCanAccessChatRoomAsync(model.ChatRoomId, userId);
@@ -51,24 +50,84 @@ namespace MessageService.Services
                     throw new Exception("Не вдалося створити повідомлення.");
                 }
 
-                // Публікуємо подію MessageCreatedEvent
-                var eventMessage = new MessageCreatedEvent
+                return ApiResponse<MessageDto>.Ok(messageDto);
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
+            }
+            catch (ValidationException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message, ex.Errors.Values.SelectMany(e => e).ToList());
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
+                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Неочікувана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
+                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
+            }
+        }
+
+        public async Task<ApiResponse<MessageDto>> SendMessageViaSagaAsync(SendMessageDto model, int userId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Перевіряємо доступ до чату
+                await _authService.EnsureCanAccessChatRoomAsync(model.ChatRoomId, userId);
+
+                // Створюємо тимчасове повідомлення в базі з базовою інформацією
+                var message = new Message
                 {
-                    Id = messageDto.Id,
-                    ChatRoomId = messageDto.ChatRoomId,
-                    ChatRoomType = messageDto.ChatRoomType,
-                    SenderUserId = messageDto.SenderUserId,
-                    Content = messageDto.Content,
-                    IsRead = messageDto.IsRead,
-                    ReadAt = messageDto.ReadAt,
-                    CreatedAt = messageDto.CreatedAt,
-                    IsEdited = messageDto.IsEdited,
-                    EditedAt = messageDto.EditedAt
+                    ChatRoomId = model.ChatRoomId,
+                    ChatRoomType = model.ChatRoomType,
+                    SenderUserId = userId,
+                    Content = "Відправляється...", // Тимчасовий заповнювач
+                    CreatedAt = DateTime.UtcNow
                 };
 
-                await _eventPublisher.PublishAsync(eventMessage);
+                await _context.Messages.AddAsync(message);
+                await _context.SaveChangesAsync();
 
-                return ApiResponse<MessageDto>.Ok(messageDto);
+                // Отримуємо реальний ID повідомлення
+                int messageId = message.Id;
+
+                // Створюємо DTO для відповіді клієнту
+                var messageDto = new MessageDto
+                {
+                    Id = messageId,
+                    ChatRoomId = model.ChatRoomId,
+                    ChatRoomType = model.ChatRoomType,
+                    SenderUserId = userId,
+                    Content = model.Content, // Показуємо необроблений текст у відповіді
+                    CreatedAt = message.CreatedAt
+                };
+
+                // Запускаємо сагу
+                var correlationId = Guid.NewGuid();
+                await _eventPublisher.PublishAsync(new MessageDeliveryStartedEvent
+                {
+                    CorrelationId = correlationId,
+                    MessageId = messageId,
+                    ChatRoomId = model.ChatRoomId,
+                    ChatRoomType = model.ChatRoomType,
+                    SenderUserId = userId,
+                    Content = model.Content
+                });
+
+                await transaction.CommitAsync();
+                return ApiResponse<MessageDto>.Ok(messageDto, "Повідомлення відправлено");
             }
             catch (EntityNotFoundException ex)
             {
@@ -82,22 +141,10 @@ namespace MessageService.Services
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
-            catch (ValidationException ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogWarning(ex.Message);
-                return ApiResponse<MessageDto>.Fail(ex.Message, ex.Errors.Values.SelectMany(e => e).ToList());
-            }
-            catch (DatabaseException ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
-                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
-            }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Неочікувана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
+                _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
                 return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
             }
         }

@@ -1,4 +1,5 @@
-﻿using MassTransit;
+﻿using System.Text.Json;
+using MassTransit;
 using MessageService.Data;
 using MessageService.Models;
 using MessageService.Repositories.Interfaces;
@@ -15,11 +16,13 @@ namespace MessageService.Repositories
         private readonly MessageDbContext _context;
         private readonly ILogger<MessageRepository> _logger;
         private readonly IEncryptionGrpcClient _encryptionClient;
-        public MessageRepository(MessageDbContext context, ILogger<MessageRepository> logger, IEncryptionGrpcClient encryptionClient)
+        private readonly IEventPublisher _eventPublisher;
+        public MessageRepository(MessageDbContext context, ILogger<MessageRepository> logger, IEncryptionGrpcClient encryptionClient, IEventPublisher eventPublisher)
         {
             _context = context;
             _logger = logger;
             _encryptionClient = encryptionClient;
+            _eventPublisher = eventPublisher;
         }
 
         public async Task<MessageDto> GetMessageByIdAsync(int messageId)
@@ -138,6 +141,83 @@ namespace MessageService.Repositories
             {
                 _logger.LogError(ex, "Message sending error for chat room {ChatRoomId}", model.ChatRoomId);
                 throw new DatabaseException("Error accessing the database", ex);
+            }
+        }
+
+        public async Task<MessageDto> CreateMessageWithEventAsync(SendMessageDto model, int userId)
+        {
+            // Розпочинаємо транзакцію
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                // 1. Шифруємо вміст повідомлення
+                var encryptedMessage = await _encryptionClient.EncryptAsync(model.Content);
+
+                // 2. Створюємо нове повідомлення
+                var message = new Message
+                {
+                    ChatRoomId = model.ChatRoomId,
+                    ChatRoomType = model.ChatRoomType,
+                    SenderUserId = userId,
+                    Content = encryptedMessage,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // 3. Додаємо повідомлення до контексту
+                await _context.Messages.AddAsync(message);
+
+                // 4. Зберігаємо зміни
+                await _context.SaveChangesAsync();
+
+                // 5. Створюємо івент
+                var eventMessage = new MessageCreatedEvent
+                {
+                    Id = message.Id,
+                    ChatRoomId = message.ChatRoomId,
+                    ChatRoomType = message.ChatRoomType,
+                    SenderUserId = message.SenderUserId,
+                    Content = model.Content,
+                    CreatedAt = message.CreatedAt,
+                    IsRead = message.IsRead,
+                    ReadAt = message.ReadAt,
+                    IsEdited = message.IsEdited,
+                    EditedAt = message.EditedAt
+                };
+
+                // 6. Публікуємо івент в тій же транзакції
+                await _eventPublisher.PublishInTransactionAsync(eventMessage, transaction);
+
+                // 7. Зберігаємо івент в базі даних
+                await _context.SaveChangesAsync();
+
+                // 8. Фіксуємо транзакцію
+                await transaction.CommitAsync();
+
+                // 9. Створюємо DTO для повернення клієнту
+                var messageDto = new MessageDto
+                {
+                    Id = message.Id,
+                    ChatRoomId = message.ChatRoomId,
+                    ChatRoomType = message.ChatRoomType,
+                    SenderUserId = message.SenderUserId,
+                    Content = model.Content,
+                    CreatedAt = message.CreatedAt,
+                    IsRead = message.IsRead,
+                    ReadAt = message.ReadAt,
+                    IsEdited = message.IsEdited,
+                    EditedAt = message.EditedAt
+                };
+
+                return messageDto;
+            }
+            catch (Exception ex)
+            {
+                // Відкат транзакції у випадку помилки
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Помилка при створенні повідомлення та івента для чату {ChatRoomId}",
+                    model.ChatRoomId);
+                throw new DatabaseException("Помилка при створенні повідомлення", ex);
             }
         }
 

@@ -2,6 +2,8 @@
 using Shared.Protos;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
+using MessageServiceDTOs;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatService.Services
 {
@@ -82,6 +84,56 @@ namespace ChatService.Services
             }
 
             return response;
+        }
+
+        public override async Task<GetChatParticipantsResponse> GetChatParticipants(
+        GetChatParticipantsRequest request, ServerCallContext context)
+        {
+            try
+            {
+                _logger.LogInformation("Отримано gRPC-запит на отримання учасників чату {ChatRoomId}, тип {ChatRoomType}",
+                    request.ChatRoomId, request.ChatRoomType);
+
+                // Отримуємо тип чату
+                var chatRoomType = (ChatRoomType)request.ChatRoomType;
+                var participants = new List<int>();
+
+                // Залежно від типу чату
+                if (chatRoomType == ChatRoomType.privateChat)
+                {
+                    // Отримуємо учасників приватного чату
+                    var userChatRooms = await _context.UserChatRooms
+                        .Where(ucr => ucr.PrivateChatRoomId == request.ChatRoomId)
+                        .ToListAsync();
+
+                    participants = userChatRooms.Select(ucr => ucr.UserId).ToList();
+                }
+                else if (chatRoomType == ChatRoomType.groupChat)
+                {
+                    // Отримуємо учасників групового чату
+                    var groupChatMembers = await _context.GroupChatMembers
+                        .Where(gcm => gcm.GroupChatRoomId == request.ChatRoomId)
+                        .ToListAsync();
+
+                    participants = groupChatMembers.Select(gcm => gcm.UserId).ToList();
+                }
+
+                return new GetChatParticipantsResponse
+                {
+                    Success = true,
+                    ParticipantIds = { participants }
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні учасників чату {ChatRoomId}", request.ChatRoomId);
+
+                return new GetChatParticipantsResponse
+                {
+                    Success = false,
+                    ErrorMessage = "Помилка при отриманні учасників чату"
+                };
+            }
         }
     }
 }

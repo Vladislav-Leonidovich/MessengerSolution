@@ -19,6 +19,8 @@ using Shared.Contracts;
 using Shared.Interceptors;
 using Shared.Protos;
 using MessageService.BackgroundServices;
+using MessageService.Sagas.MessageDelivery.Consumers;
+using MessageService.Sagas.MessageDelivery;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,10 +78,23 @@ builder.Services.AddHttpContextAccessor();
 // Налаштування MassTransit з RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
+    // Реєстрація консьюмерів
+    x.AddConsumer<SaveMessageCommandConsumer>();
+    x.AddConsumer<PublishMessageCommandConsumer>();
+    x.AddConsumer<CheckDeliveryStatusCommandConsumer>();
+
+    // Реєстрація консьюмерів для Outbox
     x.AddConsumer<MessageCreatedEventConsumer>();
     x.AddConsumer<ChatDeletedEventConsumer>();
-    x.AddConsumer<MessageUpdatedEventConsumer>();
-    x.AddConsumer<ChatAccessChangedEventConsumer>();
+
+    x.AddSagaStateMachine<MessageDeliverySagaStateMachine, MessageDeliverySagaState>()
+        .EntityFrameworkRepository(r =>
+        {
+            r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
+            r.AddDbContext<MessageDeliverySagaDbContext>();
+            r.UseQueryCache();
+        });
+
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host("rabbitmq://localhost", h =>
@@ -99,6 +114,8 @@ builder.Services.AddMassTransit(x =>
             e.ConfigureConsumer<ChatDeletedEventConsumer>(context);
             e.ConfigureConsumer<ChatAccessChangedEventConsumer>(context);
         });
+        cfg.UseMessageScheduler(new Uri("queue:message-scheduler"));
+        cfg.ConfigureEndpoints(context);
     });
 });
 
