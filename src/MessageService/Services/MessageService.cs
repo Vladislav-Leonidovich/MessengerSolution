@@ -7,50 +7,50 @@ using Shared.Exceptions;
 using MessageService.Authorization;
 using Shared.Responses;
 using MessageService.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using Shared.Sagas;
-using MessageService.Models;
-using Polly;
 
 namespace MessageService.Services
 {
     public class MessageService : IMessageService
     {
         private readonly IEventPublisher _eventPublisher;
-        private readonly HttpClient _chatClient;
+        private readonly IChatGrpcClient _chatGrpcClient;
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageAuthorizationService _authService;
-        private static int _tempMessageIdCounter = 0;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
         public MessageService(
             IHttpClientFactory httpClientFactory,
-            IHttpContextAccessor httpContextAccessor,
             IEventPublisher eventPublisher,
+            IChatGrpcClient chatGrpcClient,
             IMessageRepository messageRepository,
             IMessageAuthorizationService authService,
+            IHttpContextAccessor httpContextAccessor,
             ILogger<MessageService> logger)
         {
             _eventPublisher = eventPublisher;
-            _chatClient = httpClientFactory.CreateClient("ChatClient");
+            _chatGrpcClient = chatGrpcClient;
             _messageRepository = messageRepository;
             _authService = authService;
+            _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
 
+        
+        // Надсилає повідомлення безпосередньо через репозиторій
         public async Task<ApiResponse<MessageDto>> SendMessageAsync(SendMessageDto model, int userId)
         {
             try
             {
-                await _authService.EnsureCanAccessChatRoomAsync(model.ChatRoomId, userId);
+                // Перевіряємо доступ до чату через gRPC
+                await _authService.EnsureCanAccessChatRoomAsync(userId, model.ChatRoomId);
 
-                var messageDto = await _messageRepository.CreateMessageByUserIdAsync(model, userId);
+                // Створюємо повідомлення через репозиторій
+                var messageDto = await _messageRepository.CreateMessageWithEventAsync(model, userId);
 
-                if (messageDto == null)
-                {
-                    throw new Exception("Не вдалося створити повідомлення.");
-                }
-
-                return ApiResponse<MessageDto>.Ok(messageDto);
+                return ApiResponse<MessageDto>.Ok(messageDto, "Повідомлення успішно надіслано");
             }
             catch (EntityNotFoundException ex)
             {
@@ -79,82 +79,61 @@ namespace MessageService.Services
             }
         }
 
+        
+        // Надсилає повідомлення з використанням саги для забезпечення надійної доставки
         public async Task<ApiResponse<MessageDto>> SendMessageViaSagaAsync(SendMessageDto model, int userId)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Перевіряємо доступ до чату
-                await _authService.EnsureCanAccessChatRoomAsync(model.ChatRoomId, userId);
+                // Перевіряємо доступ до чату через gRPC
+                await _authService.EnsureCanAccessChatRoomAsync(userId, model.ChatRoomId);
 
-                // Створюємо тимчасове повідомлення в базі з базовою інформацією
-                var message = new Message
-                {
-                    ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
-                    SenderUserId = userId,
-                    Content = "Відправляється...", // Тимчасовий заповнювач
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _context.Messages.AddAsync(message);
-                await _context.SaveChangesAsync();
-
-                // Отримуємо реальний ID повідомлення
-                int messageId = message.Id;
-
-                // Створюємо DTO для відповіді клієнту
-                var messageDto = new MessageDto
-                {
-                    Id = messageId,
-                    ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
-                    SenderUserId = userId,
-                    Content = model.Content, // Показуємо необроблений текст у відповіді
-                    CreatedAt = message.CreatedAt
-                };
-
-                // Запускаємо сагу
+                // Запускаємо сагу для обробки надсилання повідомлення
                 var correlationId = Guid.NewGuid();
+
+                // Створюємо тимчасове повідомлення та отримуємо його ID через репозиторій
+                var tempMessageDto = await _messageRepository.CreateInitialMessageAsync(model, userId, correlationId);
+
+                // Публікуємо подію початку відправки повідомлення через RabbitMQ
                 await _eventPublisher.PublishAsync(new MessageDeliveryStartedEvent
                 {
                     CorrelationId = correlationId,
-                    MessageId = messageId,
+                    MessageId = tempMessageDto.Id,
                     ChatRoomId = model.ChatRoomId,
                     ChatRoomType = model.ChatRoomType,
                     SenderUserId = userId,
                     Content = model.Content
                 });
 
-                await transaction.CommitAsync();
-                return ApiResponse<MessageDto>.Ok(messageDto, "Повідомлення відправлено");
+                return ApiResponse<MessageDto>.Ok(tempMessageDto, "Повідомлення відправлено і буде доставлено отримувачам");
             }
             catch (EntityNotFoundException ex)
             {
-                await transaction.RollbackAsync();
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message);
             }
             catch (ForbiddenAccessException ex)
             {
-                await transaction.RollbackAsync();
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
                 return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
-
+        
+        // Отримує повідомлення з чату з підтримкою пагінації
         public async Task<ApiResponse<IEnumerable<MessageDto>>> GetMessagesAsync(int chatRoomId, int startIndex, int count, int userId)
         {
             try
             {
-                await _authService.EnsureCanAccessChatRoomAsync(chatRoomId, userId);
+                // Перевіряємо доступ до чату через gRPC
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
+
+                // Отримуємо повідомлення з репозиторію
                 var messages = await _messageRepository.GetMessagesByChatRoomIdAsync(chatRoomId, startIndex, count);
                 return ApiResponse<IEnumerable<MessageDto>>.Ok(messages);
             }
@@ -165,22 +144,30 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<IEnumerable<MessageDto>>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при отриманні повідомлень для чату {ChatRoomId}", chatRoomId);
-                throw;
+                _logger.LogError(ex, "Помилка при отриманні повідомлень для чату {ChatRoomId}", chatRoomId);
+                return ApiResponse<IEnumerable<MessageDto>>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
+        
+        // Отримує кількість повідомлень у чаті
         public async Task<ApiResponse<int>> GetMessagesCountByChatRoomIdAsync(int chatRoomId)
         {
             try
             {
+                // Перевіряємо існування чату через gRPC
+                bool chatExists = await _chatGrpcClient.CheckAccessAsync(GetCurrentUserId(), chatRoomId);
+                if (!chatExists)
+                {
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
+                }
+
+                // Отримуємо кількість повідомлень з репозиторію
                 var count = await _messageRepository.GetMessagesCountByChatRoomIdAsync(chatRoomId);
                 return ApiResponse<int>.Ok(count);
             }
@@ -191,24 +178,46 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<int>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при отриманні кількості повідомлень для чату {ChatRoomId}", chatRoomId);
-                throw;
+                _logger.LogError(ex, "Помилка при отриманні кількості повідомлень для чату {ChatRoomId}", chatRoomId);
+                return ApiResponse<int>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
+        
+        // Позначає повідомлення як прочитане
         public async Task<ApiResponse<MessageDto>> MarkMessageAsRead(int messageId)
         {
             try
             {
-                var message = await _messageRepository.MarkMessageAsReadByIdAsync(messageId);
-                return ApiResponse<MessageDto>.Ok(message);
+                // Отримуємо повідомлення, щоб перевірити доступ
+                var messageDto = await _messageRepository.GetMessageByIdAsync(messageId);
+
+                // Перевіряємо, чи має користувач доступ до цього чату
+                int userId = GetCurrentUserId();
+
+                if (messageDto.SenderUserId != userId)
+                {
+                    await _authService.EnsureCanAccessChatRoomAsync(userId, messageDto.ChatRoomId);
+                }
+
+                // Позначаємо повідомлення як прочитане через репозиторій
+                var updatedMessageDto = await _messageRepository.MarkMessageAsReadByIdAsync(messageId);
+
+                // Публікуємо подію про зміну стану повідомлення через RabbitMQ
+                await _eventPublisher.PublishAsync(new MessageUpdatedEvent
+                {
+                    Id = messageId,
+                    ChatRoomId = messageDto.ChatRoomId,
+                    IsRead = true,
+                    ReadAt = DateTime.UtcNow
+                });
+
+                return ApiResponse<MessageDto>.Ok(updatedMessageDto, "Повідомлення позначено як прочитане");
             }
             catch (EntityNotFoundException ex)
             {
@@ -217,22 +226,30 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при позначенні повідомлення {MessageId} як прочитане", messageId);
-                throw;
+                _logger.LogError(ex, "Помилка при позначенні повідомлення {MessageId} як прочитане", messageId);
+                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
+        
+        // Отримує останнє повідомлення з чату для попереднього перегляду
         public async Task<ApiResponse<MessageDto>> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId)
         {
             try
             {
+                // Перевіряємо існування чату через gRPC
+                bool chatExists = await _chatGrpcClient.CheckAccessAsync(GetCurrentUserId(), chatRoomId);
+                if (!chatExists)
+                {
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
+                }
+
+                // Отримуємо останнє повідомлення з репозиторію
                 var message = await _messageRepository.GetLastMessagePreviewByChatRoomIdAsync(chatRoomId);
                 return ApiResponse<MessageDto>.Ok(message);
             }
@@ -243,26 +260,51 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при отриманні останнього повідомлення для чату {ChatRoomId}", chatRoomId);
-                throw;
+                _logger.LogError(ex, "Помилка при отриманні останнього повідомлення для чату {ChatRoomId}", chatRoomId);
+                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
+        
+        // Видаляє повідомлення
         public async Task<ApiResponse<bool>> DeleteMessageAsync(int messageId)
         {
             try
             {
-                var message = await _messageRepository.GetMessageByIdAsync(messageId);
-                await _authService.EnsureCanAccessChatRoomAsync(message.ChatRoomId, message.SenderUserId);
+                // Отримуємо повідомлення, щоб перевірити доступ
+                var messageDto = await _messageRepository.GetMessageByIdAsync(messageId);
+
+                // Перевіряємо, чи має користувач право видаляти це повідомлення
+                int userId = GetCurrentUserId();
+
+                if (messageDto.SenderUserId != userId)
+                {
+                    // Перевіряємо, чи є користувач адміністратором чату через gRPC
+                    bool isAdmin = await _chatGrpcClient.CheckAdminAccessAsync(userId, messageDto.ChatRoomId);
+                    if (!isAdmin)
+                    {
+                        throw new ForbiddenAccessException("Лише відправник або адміністратор чату може видаляти повідомлення");
+                    }
+                }
+
+                // Видаляємо повідомлення через репозиторій
                 await _messageRepository.DeleteMessageByIdAsync(messageId);
-                return ApiResponse<bool>.Ok(true);
+
+                // Публікуємо подію про видалення повідомлення через RabbitMQ
+                await _eventPublisher.PublishAsync(new MessageDeletedEvent
+                {
+                    Id = messageId,
+                    ChatRoomId = messageDto.ChatRoomId,
+                    DeletedByUserId = userId,
+                    DeletedAt = DateTime.UtcNow
+                });
+
+                return ApiResponse<bool>.Ok(true, "Повідомлення успішно видалено");
             }
             catch (EntityNotFoundException ex)
             {
@@ -271,35 +313,51 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<bool>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при видаленні повідомлення {MessageId}", messageId);
-                throw;
+                _logger.LogError(ex, "Помилка при видаленні повідомлення {MessageId}", messageId);
+                return ApiResponse<bool>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
-
-        // Допрацювати метод, додати правильну перевірку наявності повідомлень у чаті
+        
+        // Видаляє всі повідомлення з чату за допомогою саги
         public async Task<ApiResponse<bool>> DeleteMessagesByChatRoomIdAsync(int chatRoomId)
         {
             try
             {
-                var messages = await _messageRepository.GetMessagesByChatRoomIdAsync(chatRoomId, 0, 0);
-                if (messages == null || !messages.Any())
+                int userId = GetCurrentUserId();
+
+                // Перевіряємо, чи має користувач право видаляти повідомлення з цього чату
+                // Зазвичай це може робити лише адміністратор чату
+                bool isAdmin = await _chatGrpcClient.CheckAdminAccessAsync(userId, chatRoomId);
+                if (!isAdmin)
                 {
-                    return ApiResponse<bool>.Ok(true);
+                    throw new ForbiddenAccessException("Лише адміністратор чату може видаляти всі повідомлення");
                 }
-                foreach (var message in messages)
+
+                // Перевіряємо існування чату
+                var chatExists = await _chatGrpcClient.CheckAccessAsync(userId, chatRoomId);
+                if (!chatExists)
                 {
-                    await _authService.EnsureCanAccessChatRoomAsync(message.ChatRoomId, message.SenderUserId);
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
                 }
-                await _messageRepository.DeleteAllMessagesByChatRoomIdAsync(chatRoomId);
-                return ApiResponse<bool>.Ok(true);
+
+                // Запускаємо сагу для масового видалення повідомлень
+                var correlationId = Guid.NewGuid();
+
+                // Публікуємо команду через RabbitMQ
+                await _eventPublisher.PublishAsync(new DeleteAllChatMessagesCommand
+                {
+                    CorrelationId = correlationId,
+                    ChatRoomId = chatRoomId,
+                    InitiatedByUserId = userId
+                });
+
+                return ApiResponse<bool>.Ok(true, "Запит на видалення всіх повідомлень прийнято");
             }
             catch (EntityNotFoundException ex)
             {
@@ -308,22 +366,41 @@ namespace MessageService.Services
             }
             catch (ForbiddenAccessException ex)
             {
-                // Логування помилки доступу
                 _logger.LogWarning(ex.Message);
-                throw;
+                return ApiResponse<bool>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
-                // Логування помилки
-                _logger.LogWarning(ex, "Помилка при видаленні повідомлень для чату {ChatRoomId}", chatRoomId);
-                throw;
+                _logger.LogError(ex, "Помилка при видаленні повідомлень для чату {ChatRoomId}", chatRoomId);
+                return ApiResponse<bool>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
+        
+        // Перевіряє, чи знаходиться авторизований користувач у чаті
         public async Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId)
         {
-            var response = await _chatClient.GetFromJsonAsync<bool>($"api/chat/get-auth-user-in-chat/{chatRoomId}");
-            return response;
+            try
+            {
+                int userId = GetCurrentUserId();
+                return await _chatGrpcClient.CheckAccessAsync(userId, chatRoomId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при перевірці приналежності користувача до чату {ChatRoomId}", chatRoomId);
+                return false;
+            }
+        }
+
+        // Отримує поточний ID користувача з контексту HTTP
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            {
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
+            }
+            return userId;
         }
     }
 }
