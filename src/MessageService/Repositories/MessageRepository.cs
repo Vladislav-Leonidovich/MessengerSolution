@@ -582,10 +582,5 @@ namespace MessageService.Repositories
                 throw new DatabaseException("Помилка при доступі до бази даних", ex);
             }
         }
-
-        public async Task<List<int>> GetMessageDeliveryStatusAsync(int messageId)
-        {
-           
-        }
     }
 }

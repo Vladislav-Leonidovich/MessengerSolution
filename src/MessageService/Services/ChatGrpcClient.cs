@@ -124,6 +124,54 @@ namespace MessageService.Services
             }
         }
 
+        public async Task<bool> CheckAdminAccessAsync(int userId, int chatRoomId)
+        {
+            try
+            {
+                // Якщо у вас є окремий метод у gRPC для перевірки прав адміністратора,
+                // використовуйте його. В іншому випадку можна імплементувати через
+                // перевірку ролі користувача в чаті.
+
+                var request = new CheckAdminAccessRequest
+                {
+                    UserId = userId,
+                    ChatRoomId = chatRoomId
+                };
+
+                var response = await _resiliencePolicy.ExecuteAsync(async () =>
+                    await _client.CheckAdminAccessAsync(request));
+
+                return response.IsAdmin;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при перевірці прав адміністратора користувача {UserId} у чаті {ChatRoomId}",
+                    userId, chatRoomId);
+                return false;
+            }
+        }
+
+        public async Task<List<int>> GetMessageDeliveryStatusAsync(int messageId, int chatRoomId)
+        {
+            try
+            {
+                var request = new GetMessageDeliveryStatusRequest
+                {
+                    MessageId = messageId,
+                    ChatRoomId = chatRoomId
+                };
+
+                var response = await _resiliencePolicy.ExecuteAsync(async () =>
+                    await _client.GetMessageDeliveryStatusAsync(request));
+
+                return response.DeliveredToUserIds.ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні статусу доставки повідомлення {MessageId}", messageId);
+                return new List<int>();
+            }
+
         private IAsyncPolicy CreateResiliencePolicy()
         {
             var retryPolicy = Policy

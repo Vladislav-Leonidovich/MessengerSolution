@@ -112,9 +112,12 @@ namespace MessageService.Sagas.MessageDelivery
 
             // Налаштування тайм-ауту для доставки
             Schedule(() => DeliveryTimeoutExpired,
-                saga => saga.DeliveryTimeoutTokenId,
-                s => s.Delay = TimeSpan.FromMinutes(5)
-            );
+    saga => saga.DeliveryTimeoutTokenId,
+    s =>
+    {
+        s.Delay = TimeSpan.FromMinutes(5);
+        s.Received = r => r.CorrelateById(context => context.Message.CorrelationId);
+    });
 
             // Обробка тайм-ауту доставки
             During(WaitingDeliveryConfirmation,
