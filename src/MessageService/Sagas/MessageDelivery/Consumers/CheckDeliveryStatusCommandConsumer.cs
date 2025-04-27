@@ -27,23 +27,24 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 _logger.LogInformation("Перевірка статусу доставки повідомлення {MessageId}",
                     context.Message.MessageId);
 
-                // Отримуємо стан саги через репозиторій
-                var sagaInstance = await _repository.GetSagaAsync(context.Message.CorrelationId, context.CancellationToken);
-
-                if (sagaInstance == null)
-                {
-                    throw new Exception($"Не знайдено стан саги з CorrelationId: {context.Message.CorrelationId}");
-                }
-
                 // Отримуємо учасників чату
                 var participants = await _chatGrpcClient.GetChatParticipantsAsync(
                     context.Message.ChatRoomId, context.Message.ChatRoomType);
 
+                // Для визначення відправника потрібно знати його ідентифікатор
+                // Оскільки ми не можемо отримати sagaInstance, будемо використовувати дані з самої команди
+                int senderUserId = context.Message.SenderUserId;
+
                 // Видаляємо відправника зі списку
-                participants.Remove(sagaInstance.SenderUserId);
+                participants.Remove(senderUserId);
+
+                // Отримуємо інформацію про вже доставлені повідомлення
+                // через запит до бази даних або через інший сервіс
+                var deliveredToUserIds = await _chatGrpcClient.GetMessageDeliveryStatusAsync(
+                    context.Message.MessageId, context.Message.ChatRoomId);
 
                 // Перевіряємо, чи всі учасники отримали повідомлення
-                bool allDelivered = participants.All(p => sagaInstance.DeliveredToUserIds.Contains(p));
+                bool allDelivered = participants.All(p => deliveredToUserIds.Contains(p));
 
                 // Публікуємо результат перевірки
                 await context.Publish(new DeliveryStatusCheckedEvent

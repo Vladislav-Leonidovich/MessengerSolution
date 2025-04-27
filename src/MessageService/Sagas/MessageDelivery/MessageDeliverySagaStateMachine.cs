@@ -96,13 +96,14 @@ namespace MessageService.Sagas.MessageDelivery
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Saga.MessageId,
                         ChatRoomId = context.Saga.ChatRoomId,
-                        ChatRoomType = context.Saga.ChatRoomType
+                        ChatRoomType = context.Saga.ChatRoomType,
+                        SenderUserId = context.Saga.SenderUserId
                     }),
 
                 When(DeliveryStatusChecked)
-                    .If(context => context.Message.IsDeliveredToAll,
-                        binder => binder.TransitionTo(Completed))
-                    .Else(binder => binder.Stay()),
+                    .IfElse(context => context.Message.IsDeliveredToAll,
+                        binder => binder.TransitionTo(Completed),
+                        binder => binder),
 
                 When(MessageDeliveryFailed)
                     .Then(context => context.Saga.ErrorMessage = context.Message.Reason)
@@ -112,13 +113,7 @@ namespace MessageService.Sagas.MessageDelivery
             // Налаштування тайм-ауту для доставки
             Schedule(() => DeliveryTimeoutExpired,
                 saga => saga.DeliveryTimeoutTokenId,
-                s => s
-                    .StartAt(context => DateTime.UtcNow.AddMinutes(5))
-                    .OnComplete(context => new MessageDeliveryTimeoutEvent
-                    {
-                        CorrelationId = context.Saga.CorrelationId,
-                        MessageId = context.Saga.MessageId
-                    })
+                s => s.Delay = TimeSpan.FromMinutes(5)
             );
 
             // Обробка тайм-ауту доставки

@@ -15,5 +15,6 @@ namespace MessageService.Repositories.Interfaces
         Task<bool> DeleteAllMessagesByChatRoomIdAsync(int chatRoomId);
         Task<MessageDto> MarkMessageAsReadByIdAsync(int messageId);
         Task<MessageDto> GetMessageByIdAsync(int messageId);
+        Task<List<int>> GetMessageDeliveryStatusAsync(int messageId);
     }
 }

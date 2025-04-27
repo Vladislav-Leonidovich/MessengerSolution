@@ -85,6 +85,7 @@ namespace Shared.Sagas
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
         public ChatRoomType ChatRoomType { get; set; }
+        public int SenderUserId { get; set; }
     }
 
     // Подія результату перевірки статусу доставки
