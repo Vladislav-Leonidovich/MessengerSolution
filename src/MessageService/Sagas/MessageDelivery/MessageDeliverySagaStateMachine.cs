@@ -8,10 +8,16 @@ namespace MessageService.Sagas.MessageDelivery
 {
     public class MessageDeliverySagaStateMachine : MassTransitStateMachine<MessageDeliverySagaState>
     {
-        public MessageDeliverySagaStateMachine()
+        public MessageDeliverySagaStateMachine(ILogger<MessageDeliverySagaStateMachine> logger)
         {
             // Налаштування стану саги
             InstanceState(x => x.CurrentState);
+
+            Schedule(() => DeliveryTimeoutExpired,
+                saga => saga.DeliveryTimeoutTokenId,
+                s => {
+                    s.Received = r => r.CorrelateById(context => context.Message.CorrelationId);
+                });
 
             // Визначення подій та кореляція з інстансами саги
             Event(() => MessageDeliveryStarted, x => x.CorrelateById(context => context.Message.CorrelationId));
@@ -26,6 +32,9 @@ namespace MessageService.Sagas.MessageDelivery
                 When(MessageDeliveryStarted)
                     .Then(context =>
                     {
+                        logger.LogInformation("Розпочато сагу доставки повідомлення {MessageId}, CorrelationId: {CorrelationId}",
+                            context.Message.MessageId, context.Message.CorrelationId);
+
                         // Ініціалізація даних саги
                         context.Saga.MessageId = context.Message.MessageId;
                         context.Saga.ChatRoomId = context.Message.ChatRoomId;
@@ -50,6 +59,8 @@ namespace MessageService.Sagas.MessageDelivery
                 When(MessageSaved)
                     .Then(context =>
                     {
+                        logger.LogInformation("Повідомлення {MessageId} успішно збережено", context.Saga.MessageId);
+
                         context.Saga.IsSaved = true;
                         context.Saga.EncryptedContent = context.Message.EncryptedContent;
                     })
@@ -65,18 +76,43 @@ namespace MessageService.Sagas.MessageDelivery
                     .TransitionTo(PublishingMessage),
 
                 When(MessageDeliveryFailed)
-                    .Then(context => context.Saga.ErrorMessage = context.Message.Reason)
+                    .Then(context =>
+                    {
+                        logger.LogError("Помилка збереження повідомлення {MessageId}: {ErrorMessage}",
+                            context.Saga.MessageId, context.Message.Reason);
+
+                        context.Saga.ErrorMessage = context.Message.Reason;
+                    })
                     .TransitionTo(Failed)
             );
 
             // Стан публікації повідомлення
             During(PublishingMessage,
                 When(MessagePublished)
-                    .Then(context => context.Saga.IsPublished = true)
+                    .Then(context =>
+                    {
+                        logger.LogInformation("Повідомлення {MessageId} опубліковано через SignalR",
+                            context.Saga.MessageId);
+
+                        context.Saga.IsPublished = true;
+                    })
+                    .Schedule(DeliveryTimeoutExpired,
+                        context => new MessageDeliveryTimeoutEvent
+                        {
+                            CorrelationId = context.Message.CorrelationId,
+                            MessageId = context.Message.MessageId
+                        },
+                        context => TimeSpan.FromMinutes(5))
                     .TransitionTo(WaitingDeliveryConfirmation),
 
                 When(MessageDeliveryFailed)
-                    .Then(context => context.Saga.ErrorMessage = context.Message.Reason)
+                    .Then(context =>
+                    {
+                        logger.LogError("Помилка публікації повідомлення {MessageId}: {ErrorMessage}",
+                            context.Saga.MessageId, context.Message.Reason);
+
+                        context.Saga.ErrorMessage = context.Message.Reason;
+                    })
                     .TransitionTo(Failed)
             );
 
@@ -89,6 +125,10 @@ namespace MessageService.Sagas.MessageDelivery
                         if (!context.Saga.DeliveredToUserIds.Contains(context.Message.UserId))
                         {
                             context.Saga.DeliveredToUserIds.Add(context.Message.UserId);
+
+                            logger.LogInformation("Повідомлення {MessageId} доставлено користувачу {UserId}. " +
+                                "Всього доставлено {Count} користувачам",
+                                context.Saga.MessageId, context.Message.UserId, context.Saga.DeliveredToUserIds.Count);
                         }
                     })
                     .Publish(context => new CheckDeliveryStatusCommand
@@ -102,33 +142,65 @@ namespace MessageService.Sagas.MessageDelivery
 
                 When(DeliveryStatusChecked)
                     .IfElse(context => context.Message.IsDeliveredToAll,
-                        binder => binder.TransitionTo(Completed),
-                        binder => binder),
+                        // Якщо всі отримали:
+                        delivered => delivered
+                            .Unschedule(DeliveryTimeoutExpired)
+                            .Then(context => {
+                                logger.LogInformation("Повідомлення {MessageId} успішно доставлено всім одержувачам",
+                                    context.Saga.MessageId);
 
-                When(MessageDeliveryFailed)
-                    .Then(context => context.Saga.ErrorMessage = context.Message.Reason)
-                    .TransitionTo(Failed)
-            );
+                                context.Saga.IsDelivered = true;
+                                context.Saga.IsDeliveredAfterTimeout = false;
+                                context.Saga.ErrorMessage = string.Empty;
+                            })
+                            .TransitionTo(Completed),
+                        // Якщо не всі отримали:
+                        notDelivered => notDelivered
+                            .Then(context => {
+                                logger.LogInformation("Повідомлення {MessageId} доставлено не всім одержувачам. " +
+                                    "Продовжуємо очікування", context.Saga.MessageId);
+                                // Залишаємося в тому ж стані і продовжуємо чекати
+                                // Таймаут спрацює, якщо чекаємо занадто довго
+                            })
+                    ),
 
-            // Налаштування тайм-ауту для доставки
-            Schedule(() => DeliveryTimeoutExpired,
-    saga => saga.DeliveryTimeoutTokenId,
-    s =>
-    {
-        s.Delay = TimeSpan.FromMinutes(5);
-        s.Received = r => r.CorrelateById(context => context.Message.CorrelationId);
-    });
-
-            // Обробка тайм-ауту доставки
-            During(WaitingDeliveryConfirmation,
-                When(DeliveryTimeoutExpired.Received)
+               When(DeliveryTimeoutExpired.Received)
                     .Then(context =>
                     {
+                        logger.LogWarning("Таймаут доставки повідомлення {MessageId}. " +
+                            "Доставлено {Count} з очікуваних користувачів",
+                            context.Saga.MessageId, context.Saga.DeliveredToUserIds.Count);
+
                         // Помічаємо, що час вийшов, але сага завершується успішно
                         context.Saga.IsDeliveredAfterTimeout = true;
                     })
-                    .TransitionTo(Completed)
+                    .TransitionTo(Completed),
+
+                When(MessageDeliveryFailed)
+                    .Then(context =>
+                    {
+                        logger.LogError("Помилка доставки повідомлення {MessageId}: {ErrorMessage}",
+                            context.Saga.MessageId, context.Message.Reason);
+
+                        context.Saga.ErrorMessage = context.Message.Reason;
+                    })
+                    .TransitionTo(Failed)
             );
+
+            // Завершення саги
+            WhenEnter(Completed, x => x.Then(context =>
+            {
+                logger.LogInformation("Сага доставки повідомлення {MessageId} успішно завершена. " +
+                    "Доставлено {Count} користувачам, IsDeliveredAfterTimeout: {IsTimeout}",
+                    context.Saga.MessageId, context.Saga.DeliveredToUserIds.Count,
+                    context.Saga.IsDeliveredAfterTimeout);
+            }));
+
+            WhenEnter(Failed, x => x.Then(context =>
+            {
+                logger.LogError("Сага доставки повідомлення {MessageId} завершена з помилкою: {ErrorMessage}",
+                    context.Saga.MessageId, context.Saga.ErrorMessage);
+            }));
 
             // Автоматичне завершення саги
             SetCompletedWhenFinalized();

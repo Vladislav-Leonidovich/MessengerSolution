@@ -88,12 +88,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<ChatDeletedEventConsumer>();
 
     x.AddSagaStateMachine<MessageDeliverySagaStateMachine, MessageDeliverySagaState>()
-        .EntityFrameworkRepository(r =>
-        {
-            r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
-            r.AddDbContext<MessageDeliverySagaDbContext>();
-            r.UseQueryCache();
-        });
+         .InMemoryRepository();
 
     x.UsingRabbitMq((context, cfg) =>
     {

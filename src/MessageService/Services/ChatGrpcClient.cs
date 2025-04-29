@@ -151,6 +151,29 @@ namespace MessageService.Services
             }
         }
 
+        public async Task<bool> CheckAdminAccessAsync(int userId, int chatRoomId)
+        {
+            try
+            {
+                var request = new CheckAdminAccessRequest
+                {
+                    UserId = userId,
+                    ChatRoomId = chatRoomId
+                };
+
+                var response = await _resiliencePolicy.ExecuteAsync(async () =>
+                    await _client.CheckAdminAccessAsync(request));
+
+                return response.IsAdmin;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при перевірці адміністраторських прав користувача {UserId} для чату {ChatRoomId}",
+                    userId, chatRoomId);
+                return false;
+            }
+        }
+
         public async Task<List<int>> GetMessageDeliveryStatusAsync(int messageId, int chatRoomId)
         {
             try

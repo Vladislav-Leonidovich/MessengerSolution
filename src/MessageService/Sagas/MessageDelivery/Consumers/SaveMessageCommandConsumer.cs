@@ -34,7 +34,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 };
 
                 // Збереження повідомлення в базу даних
-                var messageDto = await _messageRepository.CreateMessageByUserIdAsync(sendMessageDto, context.Message.SenderUserId);
+                var messageDto = await _messageRepository.CreateMessageWithEventAsync(sendMessageDto, context.Message.SenderUserId);
 
                 // Публікація події успішного збереження
                 await context.Publish(new MessageSavedEvent
