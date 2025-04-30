@@ -17,5 +17,6 @@ namespace MessageService.Repositories.Interfaces
         Task<MessageDto> MarkMessageAsReadByIdAsync(int messageId);
         Task<MessageDto> GetMessageByIdAsync(int messageId);
         Task<MessageDto?> FindMessageByCorrelationIdAsync(Guid correlationId);
+        Task<int> GetUserIdSenderMessageAsync(int messageId);
     }
 }

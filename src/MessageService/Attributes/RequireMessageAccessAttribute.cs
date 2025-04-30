@@ -40,7 +40,7 @@ namespace MessageService.Attributes
                 }
 
                 // Ищем параметр messageId или chatRoomId
-                if (!TryGetResourceId(context, out int resourceId, out string resourceType))
+                if (!TryGetResourceId(context, out int resourceId, out ResourceType resourceType))
                 {
                     _logger.LogWarning("Не вдалося визначити ID ресурсу з параметрів запиту");
                     context.Result = new BadRequestObjectResult(
@@ -48,10 +48,26 @@ namespace MessageService.Attributes
                     return;
                 }
 
+                bool hasAccess;
+
                 // Проверяем доступ в зависимости от типа ресурса
-                bool hasAccess = resourceType == "message"
-                    ? await _authService.CanAccessMessageAsync(userId, resourceId)
-                    : await _authService.CanAccessChatRoomAsync(userId, resourceId);
+                switch (resourceType)
+                {
+                    case ResourceType.Message:
+                        _logger.LogInformation("Перевірка доступу до повідомлення {MessageId} для користувача {UserId}", resourceId, userId);
+                        hasAccess = await _authService.CanAccessMessageAsync(userId, resourceId);
+                        break;
+                    case ResourceType.Chat:
+                        _logger.LogInformation("Перевірка доступу до чату {ChatRoomId} для користувача {UserId}", resourceId, userId);
+                        hasAccess = await _authService.CanAccessChatRoomAsync(userId, resourceId);
+                        break;
+                    default:
+                        _logger.LogWarning("Невідомий тип ресурсу: {ResourceType}", resourceType);
+                        context.Result = new BadRequestObjectResult(
+                            new { error = "Невідомий тип ресурсу" });
+
+                        return;
+                }
 
                 if (!hasAccess)
                 {
@@ -67,14 +83,14 @@ namespace MessageService.Attributes
                 await next();
             }
 
-            private bool TryGetResourceId(ActionExecutingContext context, out int resourceId, out string resourceType)
+            private bool TryGetResourceId(ActionExecutingContext context, out int resourceId, out ResourceType resourceType)
             {
                 // Проверяем наличие messageId
                 if (context.ActionArguments.TryGetValue("messageId", out var messageIdObj) &&
                     messageIdObj is int messageId)
                 {
                     resourceId = messageId;
-                    resourceType = "message";
+                    resourceType = ResourceType.Message;
                     return true;
                 }
 
@@ -83,7 +99,7 @@ namespace MessageService.Attributes
                     chatRoomIdObj is int chatRoomId)
                 {
                     resourceId = chatRoomId;
-                    resourceType = "chatRoom";
+                    resourceType = ResourceType.Chat;
                     return true;
                 }
 
@@ -98,7 +114,7 @@ namespace MessageService.Attributes
                         messageIdProperty.GetValue(arg) is int msgId)
                     {
                         resourceId = msgId;
-                        resourceType = "message";
+                        resourceType = ResourceType.Message;
                         return true;
                     }
 
@@ -108,13 +124,13 @@ namespace MessageService.Attributes
                         chatRoomIdProperty.GetValue(arg) is int chatId)
                     {
                         resourceId = chatId;
-                        resourceType = "chatRoom";
+                        resourceType = ResourceType.Chat;
                         return true;
                     }
                 }
 
                 resourceId = 0;
-                resourceType = string.Empty;
+                resourceType = ResourceType.None;
                 return false;
             }
         }

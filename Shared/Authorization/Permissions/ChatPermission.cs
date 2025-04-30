@@ -10,7 +10,6 @@ namespace Shared.Authorization.Permissions
     {
         // Дозволи для чатів
         ViewChat,
-        SendMessage,
         AddUserToChat,
         RemoveUserFromChat,
         ManageChatSettings,

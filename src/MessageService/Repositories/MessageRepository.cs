@@ -146,49 +146,39 @@ namespace MessageService.Repositories
 
             try
             {
-                // Перевіряємо, чи вже було оброблено це повідомлення для забезпечення ідемпотентності
-                var existingProcessedEvent = await _context.ProcessedEvents
-                    .FirstOrDefaultAsync(p => p.EventId == correlationId &&
-                                             p.EventType == "MessageSaved");
+                // Знаходимо повідомлення, яке вже було створено
+                var existingMessage = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.CorrelationId == correlationId);
 
-                if (existingProcessedEvent != null)
+                if (existingMessage != null)
                 {
-                    // Знаходимо повідомлення, яке вже було створено
-                    var existingMessage = await _context.Messages
-                        .FirstOrDefaultAsync(m => m.ChatRoomId == model.ChatRoomId &&
-                                                 m.SenderUserId == userId &&
-                                                 m.CreatedAt > DateTime.UtcNow.AddMinutes(-5));
-
-                    if (existingMessage != null)
+                    // Повертаємо існуюче повідомлення
+                    string decryptedContent;
+                    try
                     {
-                        // Повертаємо існуюче повідомлення
-                        string decryptedContent;
-                        try
-                        {
-                            decryptedContent = await _encryptionClient.DecryptAsync(existingMessage.Content);
-                        }
-                        catch (ServiceUnavailableException)
-                        {
-                            decryptedContent = "Повідомлення недоступне для відображення";
-                        }
-
-                        await transaction.CommitAsync();
-
-                        return new MessageDto
-                        {
-                            Id = existingMessage.Id,
-                            ChatRoomId = existingMessage.ChatRoomId,
-                            ChatRoomType = existingMessage.ChatRoomType,
-                            SenderUserId = existingMessage.SenderUserId,
-                            Content = decryptedContent,
-                            CreatedAt = existingMessage.CreatedAt,
-                            IsRead = existingMessage.IsRead,
-                            ReadAt = existingMessage.ReadAt,
-                            IsEdited = existingMessage.IsEdited,
-                            EditedAt = existingMessage.EditedAt,
-                            CorrelationId = existingMessage.CorrelationId
-                        };
+                        decryptedContent = await _encryptionClient.DecryptAsync(existingMessage.Content);
                     }
+                    catch (ServiceUnavailableException)
+                    {
+                        decryptedContent = "Повідомлення недоступне для відображення";
+                    }
+
+                    await transaction.CommitAsync();
+
+                    return new MessageDto
+                    {
+                        Id = existingMessage.Id,
+                        ChatRoomId = existingMessage.ChatRoomId,
+                        ChatRoomType = existingMessage.ChatRoomType,
+                        SenderUserId = existingMessage.SenderUserId,
+                        Content = decryptedContent,
+                        CreatedAt = existingMessage.CreatedAt,
+                        IsRead = existingMessage.IsRead,
+                        ReadAt = existingMessage.ReadAt,
+                        IsEdited = existingMessage.IsEdited,
+                        EditedAt = existingMessage.EditedAt,
+                        CorrelationId = existingMessage.CorrelationId
+                    };
                 }
 
                 // 1. Шифруємо вміст повідомлення через gRPC
@@ -539,7 +529,7 @@ namespace MessageService.Repositories
                 var message = await _context.Messages
                     .FirstOrDefaultAsync(m => m.CorrelationId == correlationId);
 
-                if(message == null)
+                if (message == null)
                 {
                     _logger.LogWarning("Message with CorrelationId {CorrelationId} not found", correlationId);
                     return null; // Повертаємо null, якщо повідомлення не знайдено
@@ -565,6 +555,26 @@ namespace MessageService.Repositories
             {
                 _logger.LogError(ex, "Помилка при пошуку повідомлення за CorrelationId {CorrelationId}", correlationId);
                 throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
+        public async Task<int> GetUserIdSenderMessageAsync(int messageId)
+        {
+            try
+            {
+                var message = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.Id == messageId);
+                if (message == null)
+                {
+                    _logger.LogWarning("Message with ID {MessageId} not found", messageId);
+                    throw new EntityNotFoundException("Message", messageId);
+                }
+                return message.SenderUserId;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error checking sender user ID for message {MessageId}", messageId);
+                throw new DatabaseException("Error accessing the database", ex);
             }
         }
     }

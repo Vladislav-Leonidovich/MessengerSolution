@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ChatService.Services
 {
     [Authorize]
-    public class ChatAuthorizationGrpcService : ChatAuthorizationService.ChatAuthorizationServiceBase
+    public class ChatAuthorizationGrpcService : Shared.Protos.ChatAuthorizationService.ChatAuthorizationServiceBase
     {
         private readonly IChatAuthorizationService _authService;
         private readonly ILogger<ChatAuthorizationGrpcService> _logger;

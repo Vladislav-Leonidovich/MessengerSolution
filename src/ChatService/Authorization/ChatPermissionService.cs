@@ -28,9 +28,6 @@ namespace ChatService.Authorization
                 case ChatPermission.ViewChat:
                     return await CanViewChatAsync(userId, resourceId);
 
-                case ChatPermission.SendMessage:
-                    return await CanSendMessageAsync(userId, resourceId);
-
                 case ChatPermission.AddUserToChat:
                 case ChatPermission.RemoveUserFromChat:
                 case ChatPermission.ManageChatSettings:
@@ -79,12 +76,6 @@ namespace ChatService.Authorization
                 .AnyAsync(gcm => gcm.GroupChatRoomId == chatRoomId && gcm.UserId == userId);
 
             return isGroupChatMember;
-        }
-
-        private async Task<bool> CanSendMessageAsync(int userId, int? chatRoomId)
-        {
-            // Для надсилання повідомлень достатньо бути членом чату
-            return await CanViewChatAsync(userId, chatRoomId);
         }
 
         private async Task<bool> IsOwnerOrAdminAsync(int userId, int? chatRoomId)

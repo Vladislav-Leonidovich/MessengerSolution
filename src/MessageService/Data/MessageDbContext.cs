@@ -25,6 +25,9 @@ namespace MessageService.Data
             modelBuilder.Entity<Message>()
                 .HasIndex(m => m.ChatRoomId);
 
+            modelBuilder.Entity<Message>()
+                .HasIndex(m => m.CorrelationId);
+
             modelBuilder.Entity<OutboxMessage>()
                 .HasIndex(o => o.ProcessedAt);
 
