@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using ChatService.Consumers;
 using MassTransit;
-using MessageService.Consumers;
 using MessageService.Data;
 using MessageService.Hubs;
 using MessageService.Repositories.Interfaces;

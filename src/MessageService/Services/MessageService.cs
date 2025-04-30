@@ -376,7 +376,43 @@ namespace MessageService.Services
             }
         }
 
-        
+        public async Task<ApiResponse<bool>> ConfirmMessageDeliveryAsync(int messageId, int userId)
+        {
+            try
+            {
+
+                var message = await _messageRepository.GetMessageByIdAsync(messageId);
+                if (message == null)
+                {
+                    throw new EntityNotFoundException("Message", messageId);
+                }
+
+                if (message.CorrelationId == null)
+                {
+                    return ApiResponse<bool>.Fail("Повідомлення не належить жодній сазі доставки");
+                }
+
+                await _eventPublisher.PublishAsync(new MessageDeliveredToUserEvent
+                {
+                    CorrelationId = message.CorrelationId.Value,
+                    MessageId = messageId,
+                    UserId = userId
+                });
+
+                return ApiResponse<bool>.Ok(true, "Підтвердження доставки надіслано");
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при підтвердженні доставки повідомлення {MessageId}", messageId);
+                return ApiResponse<bool>.Fail("Сталася внутрішня помилка сервера");
+            }
+        }
+
         // Перевіряє, чи знаходиться авторизований користувач у чаті
         public async Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId)
         {

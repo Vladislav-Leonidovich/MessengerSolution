@@ -174,27 +174,6 @@ namespace MessageService.Services
             }
         }
 
-        public async Task<List<int>> GetMessageDeliveryStatusAsync(int messageId, int chatRoomId)
-        {
-            try
-            {
-                var request = new GetMessageDeliveryStatusRequest
-                {
-                    MessageId = messageId,
-                    ChatRoomId = chatRoomId
-                };
-
-                var response = await _resiliencePolicy.ExecuteAsync(async () =>
-                    await _client.GetMessageDeliveryStatusAsync(request));
-
-                return response.DeliveredToUserIds.ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні статусу доставки повідомлення {MessageId}", messageId);
-                return new List<int>();
-            }
-
         private IAsyncPolicy CreateResiliencePolicy()
         {
             var retryPolicy = Policy

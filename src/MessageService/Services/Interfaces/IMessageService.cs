@@ -17,6 +17,7 @@ namespace MessageService.Services.Interfaces
         Task<ApiResponse<bool>> DeleteMessageAsync(int messageId);
         Task<ApiResponse<bool>> DeleteMessagesByChatRoomIdAsync(int chatRoomId);
         Task<ApiResponse<int>> GetMessagesCountByChatRoomIdAsync(int chatRoomId);
+        Task<ApiResponse<bool>> ConfirmMessageDeliveryAsync(int messageId);
         Task<bool> IsAuthUserInChatRoomsAsync(int chatRoomId);
     }
 }

@@ -131,13 +131,20 @@ namespace MessageService.Sagas.MessageDelivery
                                 context.Saga.MessageId, context.Message.UserId, context.Saga.DeliveredToUserIds.Count);
                         }
                     })
-                    .Publish(context => new CheckDeliveryStatusCommand
+                    .ThenAsync(async context =>
                     {
-                        CorrelationId = context.Message.CorrelationId,
-                        MessageId = context.Saga.MessageId,
-                        ChatRoomId = context.Saga.ChatRoomId,
-                        ChatRoomType = context.Saga.ChatRoomType,
-                        SenderUserId = context.Saga.SenderUserId
+                        // Відкладене відправлення CheckDeliveryStatusCommand для зменшення навантаження
+                        // Чекаємо 200мс перед перевіркою, щоб накопичити більше підтверджень
+                        await Task.Delay(200);
+
+                        await context.Publish(new CheckDeliveryStatusCommand
+                        {
+                            CorrelationId = context.Message.CorrelationId,
+                            MessageId = context.Saga.MessageId,
+                            ChatRoomId = context.Saga.ChatRoomId,
+                            ChatRoomType = context.Saga.ChatRoomType,
+                            SenderUserId = context.Saga.SenderUserId
+                        });
                     }),
 
                 When(DeliveryStatusChecked)

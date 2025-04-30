@@ -14,5 +14,9 @@ namespace MessageServiceDTOs
         public DateTime? ReadAt { get; set; }
         public bool IsEdited { get; set; } = false;
         public DateTime? EditedAt { get; set; }
+        public Guid? CorrelationId { get; set; }
+        public bool IsDeliveryInProgress { get; set; }
+        public bool IsDeliveredToAll { get; set; }
+        public int DeliveredToCount { get; set; }
     }
 }

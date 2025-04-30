@@ -10,6 +10,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<SaveMessageCommandConsumer> _logger;
 
+
         public SaveMessageCommandConsumer(
             IMessageRepository messageRepository,
             ILogger<SaveMessageCommandConsumer> logger)
@@ -22,8 +23,27 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
         {
             try
             {
-                _logger.LogInformation("Обробка команди SaveMessageCommand. MessageId: {MessageId}",
-                    context.Message.MessageId);
+                _logger.LogInformation("Обробка команди SaveMessageCommand. MessageId: {MessageId}, CorrelationId: {CorrelationId}",
+                    context.Message.MessageId, context.Message.CorrelationId);
+
+                // Перевіряємо, чи вже існує повідомлення з таким CorrelationId
+                var existingMessage = await _messageRepository.FindMessageByCorrelationIdAsync(context.Message.CorrelationId);
+
+                if (existingMessage != null)
+                {
+                    // Якщо повідомлення вже існує, публікуємо подію про успішне збереження
+                    _logger.LogInformation("Знайдено існуюче повідомлення з ID {MessageId} для CorrelationId {CorrelationId}",
+                        existingMessage.Id, context.Message.CorrelationId);
+
+                    await context.Publish(new MessageSavedEvent
+                    {
+                        CorrelationId = context.Message.CorrelationId,
+                        MessageId = existingMessage.Id,
+                        EncryptedContent = existingMessage.Content
+                    });
+
+                    return;
+                }
 
                 // Перетворення команди на DTO для збереження
                 var sendMessageDto = new SendMessageDto
@@ -34,7 +54,10 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 };
 
                 // Збереження повідомлення в базу даних
-                var messageDto = await _messageRepository.CreateMessageWithEventAsync(sendMessageDto, context.Message.SenderUserId);
+                var messageDto = await _messageRepository.CreateMessageForSagaAsync(
+                    sendMessageDto,
+                    context.Message.SenderUserId,
+                    context.Message.CorrelationId);
 
                 // Публікація події успішного збереження
                 await context.Publish(new MessageSavedEvent

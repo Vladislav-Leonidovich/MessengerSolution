@@ -6,6 +6,9 @@ namespace MessageService.Models
     {
         public int Id { get; set; }
 
+        // Ідентифікатор саги доставки повідомлення
+        public Guid? CorrelationId { get; set; }
+
         // Ідентифікатор чату (особистого або групового)
         public int ChatRoomId { get; set; }
 

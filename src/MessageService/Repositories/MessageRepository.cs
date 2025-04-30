@@ -61,7 +61,8 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    EditedAt = message.EditedAt,
+                    CorrelationId = message.CorrelationId
                 };
                 return messageDto;
             }
@@ -125,7 +126,8 @@ namespace MessageService.Repositories
                         IsRead = messages[i].IsRead,
                         ReadAt = messages[i].ReadAt,
                         IsEdited = messages[i].IsEdited,
-                        EditedAt = messages[i].EditedAt
+                        EditedAt = messages[i].EditedAt,
+                        CorrelationId = messages[i].CorrelationId,
                     });
                 }
 
@@ -138,66 +140,57 @@ namespace MessageService.Repositories
             }
         }
 
-        public async Task<MessageDto> CreateInitialMessageAsync(SendMessageDto model, int userId, Guid correlationId)
+        public async Task<MessageDto> CreateMessageForSagaAsync(SendMessageDto model, int userId, Guid correlationId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // Створюємо початковий запис повідомлення
-                var message = new Message
+                // Перевіряємо, чи вже було оброблено це повідомлення для забезпечення ідемпотентності
+                var existingProcessedEvent = await _context.ProcessedEvents
+                    .FirstOrDefaultAsync(p => p.EventId == correlationId &&
+                                             p.EventType == "MessageSaved");
+
+                if (existingProcessedEvent != null)
                 {
-                    ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
-                    SenderUserId = userId,
-                    Content = "Повідомлення відправляється...", // Тимчасовий заповнювач
-                    CreatedAt = DateTime.UtcNow
-                };
+                    // Знаходимо повідомлення, яке вже було створено
+                    var existingMessage = await _context.Messages
+                        .FirstOrDefaultAsync(m => m.ChatRoomId == model.ChatRoomId &&
+                                                 m.SenderUserId == userId &&
+                                                 m.CreatedAt > DateTime.UtcNow.AddMinutes(-5));
 
-                // Зберігаємо повідомлення
-                await _context.Messages.AddAsync(message);
-                await _context.SaveChangesAsync();
+                    if (existingMessage != null)
+                    {
+                        // Повертаємо існуюче повідомлення
+                        string decryptedContent;
+                        try
+                        {
+                            decryptedContent = await _encryptionClient.DecryptAsync(existingMessage.Content);
+                        }
+                        catch (ServiceUnavailableException)
+                        {
+                            decryptedContent = "Повідомлення недоступне для відображення";
+                        }
 
-                // Зберігаємо запис у таблиці ProcessedEvents для забезпечення ідемпотентності
-                var processedEvent = new ProcessedEvent
-                {
-                    EventId = correlationId,
-                    EventType = "MessageDeliveryStartedEvent",
-                    ProcessedAt = DateTime.UtcNow
-                };
+                        await transaction.CommitAsync();
 
-                await _context.ProcessedEvents.AddAsync(processedEvent);
-                await _context.SaveChangesAsync();
+                        return new MessageDto
+                        {
+                            Id = existingMessage.Id,
+                            ChatRoomId = existingMessage.ChatRoomId,
+                            ChatRoomType = existingMessage.ChatRoomType,
+                            SenderUserId = existingMessage.SenderUserId,
+                            Content = decryptedContent,
+                            CreatedAt = existingMessage.CreatedAt,
+                            IsRead = existingMessage.IsRead,
+                            ReadAt = existingMessage.ReadAt,
+                            IsEdited = existingMessage.IsEdited,
+                            EditedAt = existingMessage.EditedAt,
+                            CorrelationId = existingMessage.CorrelationId
+                        };
+                    }
+                }
 
-                await transaction.CommitAsync();
-
-                // Повертаємо DTO з незашифрованим вмістом для відображення клієнту
-                return new MessageDto
-                {
-                    Id = message.Id,
-                    ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
-                    SenderUserId = message.SenderUserId,
-                    Content = model.Content, // Оригінальний текст
-                    CreatedAt = message.CreatedAt,
-                    IsRead = false,
-                    IsEdited = false
-                };
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Помилка при створенні початкового повідомлення для саги");
-                throw new DatabaseException("Помилка при створенні повідомлення", ex);
-            }
-        }
-
-        public async Task<MessageDto> CreateMessageWithEventAsync(SendMessageDto model, int userId)
-        {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-
-            try
-            {
                 // 1. Шифруємо вміст повідомлення через gRPC
                 string encryptedContent;
                 try
@@ -206,7 +199,6 @@ namespace MessageService.Repositories
                 }
                 catch (ServiceUnavailableException)
                 {
-                    // Якщо сервіс шифрування недоступний, зберігаємо нешифрований текст
                     _logger.LogWarning("Сервіс шифрування недоступний. Повідомлення буде збережено без шифрування.");
                     encryptedContent = model.Content;
                 }
@@ -218,44 +210,33 @@ namespace MessageService.Repositories
                     ChatRoomType = model.ChatRoomType,
                     SenderUserId = userId,
                     Content = encryptedContent,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false,
+                    ReadAt = null,
+                    IsEdited = false,
+                    EditedAt = null,
+                    CorrelationId = correlationId
                 };
 
                 // 3. Додаємо повідомлення до контексту
                 await _context.Messages.AddAsync(message);
                 await _context.SaveChangesAsync();
 
-                // 4. Створюємо подію
-                var messageEvent = new MessageCreatedEvent
+                // 4. Зберігаємо запис для забезпечення ідемпотентності
+                var processedEvent = new ProcessedEvent
                 {
-                    Id = message.Id,
-                    ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
-                    SenderUserId = message.SenderUserId,
-                    Content = model.Content, // Відправляємо нешифрований текст для відображення
-                    CreatedAt = message.CreatedAt,
-                    IsRead = message.IsRead,
-                    ReadAt = message.ReadAt,
-                    IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    EventId = correlationId,
+                    EventType = "MessageSaved",
+                    ProcessedAt = DateTime.UtcNow
                 };
 
-                // 5. Публікуємо подію через outbox pattern
-                var outboxMessage = new OutboxMessage
-                {
-                    Id = Guid.NewGuid(),
-                    EventType = nameof(MessageCreatedEvent),
-                    EventData = JsonSerializer.Serialize(messageEvent),
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _context.OutboxMessages.AddAsync(outboxMessage);
+                await _context.ProcessedEvents.AddAsync(processedEvent);
                 await _context.SaveChangesAsync();
 
-                // 6. Фіксуємо транзакцію
+                // 5. Фіксуємо транзакцію
                 await transaction.CommitAsync();
 
-                // 7. Повертаємо DTO з нешифрованим вмістом для відображення клієнту
+                // 6. Повертаємо DTO з нешифрованим вмістом для відображення клієнту
                 return new MessageDto
                 {
                     Id = message.Id,
@@ -267,56 +248,21 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    EditedAt = message.EditedAt,
+                    CorrelationId = message.CorrelationId
                 };
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Message sending error for chat room {ChatRoomId}", model.ChatRoomId);
+                throw new DatabaseException("Error accessing the database", ex);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Помилка при створенні повідомлення та події для чату {ChatRoomId}",
-                    model.ChatRoomId);
+                _logger.LogError(ex, "Помилка при створенні повідомлення для саги");
                 throw new DatabaseException("Помилка при створенні повідомлення", ex);
-            }
-        }
-
-        // Цей метод створює повідомлення без публікації події (використовується для тестування)
-        public async Task<MessageDto> CreateMessageByUserIdAsync(SendMessageDto model, int userId)
-        {
-            try
-            {
-                var encryptedMessage = await _encryptionClient.EncryptAsync(model.Content);
-
-                var message = new Message
-                {
-                    ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
-                    SenderUserId = userId,
-                    Content = encryptedMessage,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _context.Messages.AddAsync(message);
-                await _context.SaveChangesAsync();
-
-                var messageDto = new MessageDto
-                {
-                    Id = message.Id,
-                    ChatRoomId = message.ChatRoomId,
-                    SenderUserId = message.SenderUserId,
-                    Content = model.Content,
-                    CreatedAt = message.CreatedAt,
-                    IsRead = message.IsRead,
-                    ReadAt = message.ReadAt,
-                    IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
-                };
-
-                return messageDto;
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "Message sending error for chat room {ChatRoomId}", model.ChatRoomId);
-                throw new DatabaseException("Error accessing the database", ex);
             }
         }
 
@@ -347,7 +293,8 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    EditedAt = message.EditedAt,
+                    CorrelationId = message.CorrelationId
                 };
                 return messageDto;
             }
@@ -418,7 +365,8 @@ namespace MessageService.Repositories
                     IsRead = lastMessage.IsRead,
                     ReadAt = lastMessage.ReadAt,
                     IsEdited = lastMessage.IsEdited,
-                    EditedAt = lastMessage.EditedAt
+                    EditedAt = lastMessage.EditedAt,
+                    CorrelationId = lastMessage.CorrelationId,
                 };
             }
             catch (DbUpdateException ex)
@@ -557,7 +505,8 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    EditedAt = message.EditedAt,
+                    CorrelationId = message.CorrelationId
                 };
 
                 // Зберігаємо запис для забезпечення ідемпотентності
@@ -579,6 +528,42 @@ namespace MessageService.Repositories
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Помилка бази даних при позначенні повідомлення {MessageId} як прочитане", messageId);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
+        public async Task<MessageDto?> FindMessageByCorrelationIdAsync(Guid correlationId)
+        {
+            try
+            {
+                var message = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.CorrelationId == correlationId);
+
+                if(message == null)
+                {
+                    _logger.LogWarning("Message with CorrelationId {CorrelationId} not found", correlationId);
+                    return null; // Повертаємо null, якщо повідомлення не знайдено
+                }
+
+                // Створюємо DTO
+                return new MessageDto
+                {
+                    Id = message.Id,
+                    ChatRoomId = message.ChatRoomId,
+                    ChatRoomType = message.ChatRoomType,
+                    SenderUserId = message.SenderUserId,
+                    Content = message.Content,
+                    CreatedAt = message.CreatedAt,
+                    IsRead = message.IsRead,
+                    ReadAt = message.ReadAt,
+                    IsEdited = message.IsEdited,
+                    EditedAt = message.EditedAt,
+                    CorrelationId = message.CorrelationId
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при пошуку повідомлення за CorrelationId {CorrelationId}", correlationId);
                 throw new DatabaseException("Помилка при доступі до бази даних", ex);
             }
         }

@@ -1,4 +1,5 @@
 ﻿using MassTransit;
+using MessageService.Data;
 using MessageService.Services.Interfaces;
 using Shared.Sagas;
 
@@ -8,49 +9,69 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
     {
         private readonly IChatGrpcClient _chatGrpcClient;
         private readonly ILogger<CheckDeliveryStatusCommandConsumer> _logger;
-        private readonly ISagaRepository<MessageDeliverySagaState> _repository;
+        private readonly MessageDeliverySagaDbContext _sagaDbContext;
+
 
         public CheckDeliveryStatusCommandConsumer(
             IChatGrpcClient chatGrpcClient,
-            ILogger<CheckDeliveryStatusCommandConsumer> logger,
-            ISagaRepository<MessageDeliverySagaState> repository)
+            MessageDeliverySagaDbContext sagaDbContext,
+            ILogger<CheckDeliveryStatusCommandConsumer> logger)
         {
             _chatGrpcClient = chatGrpcClient;
+            _sagaDbContext = sagaDbContext;
             _logger = logger;
-            _repository = repository;
         }
 
         public async Task Consume(ConsumeContext<CheckDeliveryStatusCommand> context)
         {
             try
             {
-                _logger.LogInformation("Перевірка статусу доставки повідомлення {MessageId}",
-                    context.Message.MessageId);
+                var correlationId = context.Message.CorrelationId;
+                var messageId = context.Message.MessageId;
 
-                // Отримуємо учасників чату
+                _logger.LogInformation("Перевірка статусу доставки повідомлення {MessageId}, CorrelationId: {CorrelationId}",
+                    messageId, correlationId);
+
+                // Отримуємо учасників чату через gRPC
                 var participants = await _chatGrpcClient.GetChatParticipantsAsync(
                     context.Message.ChatRoomId, context.Message.ChatRoomType);
 
-                // Для визначення відправника потрібно знати його ідентифікатор
-                // Оскільки ми не можемо отримати sagaInstance, будемо використовувати дані з самої команди
+                // Видаляємо відправника зі списку учасників
                 int senderUserId = context.Message.SenderUserId;
-
-                // Видаляємо відправника зі списку
                 participants.Remove(senderUserId);
 
-                // Отримуємо інформацію про вже доставлені повідомлення
-                // через запит до бази даних або через інший сервіс
-                var deliveredToUserIds = await _chatGrpcClient.GetMessageDeliveryStatusAsync(
-                    context.Message.MessageId, context.Message.ChatRoomId);
+                // Отримуємо стан саги, щоб перевірити, кому вже доставлено
+                var saga = await _sagaDbContext.MessageDeliverySagas
+                .FindAsync(correlationId);
+
+                if (saga == null)
+                {
+                    _logger.LogWarning("Не знайдено сагу з CorrelationId {CorrelationId} для повідомлення {MessageId}",
+                        correlationId, messageId);
+
+                    // Якщо сага не знайдена, вважаємо, що повідомлення не доставлено
+                    await context.Publish(new DeliveryStatusCheckedEvent
+                    {
+                        CorrelationId = correlationId,
+                        MessageId = messageId,
+                        IsDeliveredToAll = false
+                    });
+
+                    return;
+                }
 
                 // Перевіряємо, чи всі учасники отримали повідомлення
-                bool allDelivered = participants.All(p => deliveredToUserIds.Contains(p));
+                bool allDelivered = participants.All(p => saga.DeliveredToUserIds.Contains(p));
+
+                _logger.LogInformation("Статус доставки повідомлення {MessageId}: {DeliveredCount}/{TotalCount}, " +
+                    "Всім доставлено: {AllDelivered}",
+                    messageId, saga.DeliveredToUserIds.Count, participants.Count, allDelivered);
 
                 // Публікуємо результат перевірки
                 await context.Publish(new DeliveryStatusCheckedEvent
                 {
-                    CorrelationId = context.Message.CorrelationId,
-                    MessageId = context.Message.MessageId,
+                    CorrelationId = correlationId,
+                    MessageId = messageId,
                     IsDeliveredToAll = allDelivered
                 });
             }
@@ -59,12 +80,12 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 _logger.LogError(ex, "Помилка при перевірці статусу доставки повідомлення {MessageId}",
                     context.Message.MessageId);
 
-                // У випадку помилки вважаємо, що доставка завершена (щоб сага не застрягла)
+                // У випадку помилки створюємо подію з негативним результатом
                 await context.Publish(new DeliveryStatusCheckedEvent
                 {
                     CorrelationId = context.Message.CorrelationId,
                     MessageId = context.Message.MessageId,
-                    IsDeliveredToAll = true
+                    IsDeliveredToAll = false  // Змінюємо на false, щоб сага могла спробувати ще раз
                 });
             }
         }

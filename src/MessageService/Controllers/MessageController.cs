@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MessageService.Services.Interfaces;
+using Shared.MessageServiceDTOs;
 
 namespace MessageService.Controllers
 {
@@ -38,6 +39,18 @@ namespace MessageService.Controllers
         public async Task<IActionResult> GetMessages(int chatRoomId, [FromQuery] int startIndex = 1, [FromQuery] int count = 20)
         {
             var response = await _messageService.GetMessagesAsync(chatRoomId, startIndex, count);
+            return Ok(response);
+        }
+
+        [HttpPost("confirm-delivery")]
+        public async Task<IActionResult> ConfirmMessageDelivery([FromBody] ConfirmDeliveryDto model)
+        {
+            if (model == null || model.MessageId <= 0)
+            {
+                return BadRequest(new { Message = "Неправильні дані для підтвердження доставки." });
+            }
+
+            var response = await _messageService.ConfirmMessageDeliveryAsync(model.MessageId);
             return Ok(response);
         }
 

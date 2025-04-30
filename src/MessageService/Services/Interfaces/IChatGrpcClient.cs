@@ -9,6 +9,5 @@ namespace MessageService.Services.Interfaces
             List<(int UserId, int ChatRoomId)> checks);
         Task<List<int>> GetChatParticipantsAsync(int chatRoomId, ChatRoomType chatRoomType);
         Task<bool> CheckAdminAccessAsync(int userId, int chatRoomId);
-        Task<List<int>> GetMessageDeliveryStatusAsync(int messageId, int chatRoomId);
     }
 }
