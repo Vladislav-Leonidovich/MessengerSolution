@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
-using ChatService.Consumers;
 using MassTransit;
 using MessageService.Data;
 using MessageService.Hubs;
@@ -20,10 +19,18 @@ using Shared.Protos;
 using MessageService.BackgroundServices;
 using MessageService.Sagas.MessageDelivery.Consumers;
 using MessageService.Sagas.MessageDelivery;
+using MessageService.Authorization.ChatService.Authorization;
+using Shared.Authorization.Permissions;
+using Shared.Authorization;
+using MessageService.Sagas.DeleteAllMessages.Consumers;
+using MessageService.Sagas.DeleteAllMessages;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<MessageDbContext>(options =>
+    options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
+
+builder.Services.AddDbContext<MessageDeliverySagaDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 
 builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
@@ -31,6 +38,7 @@ builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IMessageAuthorizationService, MessageAuthorizationService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
+builder.Services.AddScoped<IPermissionService<MessagePermission>, MessagePermissionService>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();
 
@@ -78,44 +86,83 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddMassTransit(x =>
 {
     // Реєстрація консьюмерів
+
+    // Реєстрація споживачів для саги видалення повідомлень
+    x.AddConsumer<DeleteChatMessagesCommandConsumer>();
+    x.AddConsumer<SendChatNotificationCommandConsumer>();
+
+    // Реєстрація споживачів для саги доставки повідомлень
     x.AddConsumer<SaveMessageCommandConsumer>();
     x.AddConsumer<PublishMessageCommandConsumer>();
     x.AddConsumer<CheckDeliveryStatusCommandConsumer>();
 
     // Реєстрація консьюмерів для Outbox
-    x.AddConsumer<MessageCreatedEventConsumer>();
-    x.AddConsumer<ChatDeletedEventConsumer>();
 
     x.AddSagaStateMachine<MessageDeliverySagaStateMachine, MessageDeliverySagaState>()
-         .InMemoryRepository();
+        .EntityFrameworkRepository(r =>
+        {
+            r.ExistingDbContext<MessageDeliverySagaDbContext>();
+            r.ConcurrencyMode = ConcurrencyMode.Optimistic;
+        });
+
+    x.AddSagaStateMachine<DeleteAllMessagesSagaStateMachine, DeleteAllMessagesSagaState>()
+         .EntityFrameworkRepository(r =>
+         {
+             r.ExistingDbContext<MessageDbContext>();
+             r.ConcurrencyMode = ConcurrencyMode.Optimistic;
+         });
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host("rabbitmq://localhost", h =>
+        cfg.Host(builder.Configuration["RabbitMq:Host"], h =>
         {
-            h.Username("guest");
-            h.Password("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");
+            h.Username(builder.Configuration["RabbitMq:Username"]);
+            h.Password(builder.Configuration["RabbitMq:Password"]);
         });
 
-        cfg.ReceiveEndpoint("message-events-queue", e =>
+        cfg.ReceiveEndpoint("delete-chat-messages", e =>
         {
-            e.ConfigureConsumer<MessageCreatedEventConsumer>(context);
-            e.ConfigureConsumer<MessageUpdatedEventConsumer>(context);
+            e.ConfigureConsumer<DeleteChatMessagesCommandConsumer>(context);
         });
 
-        cfg.ReceiveEndpoint("chat-events-queue", e =>
+        cfg.ReceiveEndpoint("send-chat-notification", e =>
         {
-            e.ConfigureConsumer<ChatDeletedEventConsumer>(context);
-            e.ConfigureConsumer<ChatAccessChangedEventConsumer>(context);
+            e.ConfigureConsumer<SendChatNotificationCommandConsumer>(context);
         });
-        cfg.UseMessageScheduler(new Uri("queue:message-scheduler"));
+
+        cfg.ReceiveEndpoint("save-message", e =>
+        {
+            e.ConfigureConsumer<SaveMessageCommandConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("publish-message", e =>
+        {
+            e.ConfigureConsumer<PublishMessageCommandConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("check-delivery-status", e =>
+        {
+            e.ConfigureConsumer<CheckDeliveryStatusCommandConsumer>(context);
+        });
+
+        // Налаштування черг для саг
+        cfg.ReceiveEndpoint("delete-all-messages-saga", e =>
+        {
+            e.ConfigureSaga<DeleteAllMessagesSagaState>(context);
+        });
+
+        cfg.ReceiveEndpoint("message-delivery-saga", e =>
+        {
+            e.ConfigureSaga<MessageDeliverySagaState>(context);
+        });
+
         cfg.ConfigureEndpoints(context);
     });
 });
 
 builder.Services.AddSignalR();
 
-builder.Services.AddHttpClient("EncryptionClient", client =>
+/*builder.Services.AddHttpClient("EncryptionClient", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7104/");
 })
@@ -129,7 +176,7 @@ builder.Services.AddHttpClient("IdentityClient", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7101/");
 })
-.AddHttpMessageHandler<InternalAuthHandler>();
+.AddHttpMessageHandler<InternalAuthHandler>();*/
 
 // Реєструємо обробник
 builder.Services.AddTransient<InternalAuthHandler>();
@@ -152,6 +199,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = false,
             ValidateAudience = false,
             ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/messageHub"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -186,10 +247,23 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // Автоматична міграція бази даних (зручно для розробки)
+// Міграції бази даних при запуску
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<MessageDbContext>();
-    dbContext.Database.Migrate();
+    var services = scope.ServiceProvider;
+    try
+    {
+        var messageContext = services.GetRequiredService<MessageDbContext>();
+        messageContext.Database.Migrate();
+
+        var sagaContext = services.GetRequiredService<MessageDeliverySagaDbContext>();
+        sagaContext.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Помилка при міграції бази даних");
+    }
 }
 
 // Configure the HTTP request pipeline.

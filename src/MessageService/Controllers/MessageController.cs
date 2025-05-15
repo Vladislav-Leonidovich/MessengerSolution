@@ -11,6 +11,7 @@ namespace MessageService.Controllers
 {
     [Authorize]
     [ApiController]
+    [ValidateModelState]
     [Route("api/[controller]")]
     public class MessageController : ControllerBase
     {
@@ -29,10 +30,6 @@ namespace MessageService.Controllers
         [RequirePermission(MessagePermission.SendMessage)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> SendMessage([FromBody] SendMessageDto model)
         {
-            if (model == null || string.IsNullOrWhiteSpace(model.Content))
-            {
-                return BadRequest(new { Message = "Неправильні дані для надсилання повідомлення." });
-            }
             var userId = GetCurrentUserId();
             var response = await _messageService.SendMessageViaSagaAsync(model, userId);
             // Повертаємо відповідь із даними створеного повідомлення
@@ -45,10 +42,6 @@ namespace MessageService.Controllers
         [RequirePermission(MessagePermission.ViewMessage)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> GetMessages(int chatRoomId, [FromQuery] int startIndex = 1, [FromQuery] int count = 20)
         {
-            if (chatRoomId <= 0)
-            {
-                return BadRequest(new { Message = "Неправильний ідентифікатор чату." });
-            }
             var userId = GetCurrentUserId();
             var response = await _messageService.GetMessagesAsync(chatRoomId, userId, startIndex, count);
             return Ok(response);
@@ -57,10 +50,6 @@ namespace MessageService.Controllers
         [HttpPost("confirm-delivery")]
         public async Task<IActionResult> ConfirmMessageDelivery([FromBody] ConfirmDeliveryDto model)
         {
-            if (model == null || model.MessageId <= 0)
-            {
-                return BadRequest(new { Message = "Неправильні дані для підтвердження доставки." });
-            }
             var userId = GetCurrentUserId();
             var response = await _messageService.ConfirmMessageDeliveryAsync(model.MessageId, userId);
             return Ok(response);
@@ -106,6 +95,7 @@ namespace MessageService.Controllers
         // DELETE: api/message/delete-by-chat/{chatRoomId}
         // Видаляє всі повідомлення для зазначеного чату
         [HttpDelete("delete-by-chat/{chatRoomId}")]
+        [RequirePermission(MessagePermission.CleanChat)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> DeleteMessagesByChatRoomId(int chatRoomId)
         {
             var userId = GetCurrentUserId();

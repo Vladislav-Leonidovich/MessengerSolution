@@ -18,13 +18,11 @@ namespace MessageService.Repositories
         private readonly MessageDbContext _context;
         private readonly ILogger<MessageRepository> _logger;
         private readonly IEncryptionGrpcClient _encryptionClient;
-        private readonly IEventPublisher _eventPublisher;
-        public MessageRepository(MessageDbContext context, ILogger<MessageRepository> logger, IEncryptionGrpcClient encryptionClient, IEventPublisher eventPublisher)
+        public MessageRepository(MessageDbContext context, ILogger<MessageRepository> logger, IEncryptionGrpcClient encryptionClient)
         {
             _context = context;
             _logger = logger;
             _encryptionClient = encryptionClient;
-            _eventPublisher = eventPublisher;
         }
 
         public async Task<MessageDto> GetMessageByIdAsync(int messageId)
@@ -83,7 +81,8 @@ namespace MessageService.Repositories
 
                 if (messageCount == 0)
                 {
-                    return new List<MessageDto>(); // Повертаємо порожній список
+                    _logger.LogWarning("No messages found for chat room {ChatRoomId}", chatRoomId);
+                    return Enumerable.Empty<MessageDto>();
                 }
 
                 var messages = await _context.Messages
@@ -96,7 +95,7 @@ namespace MessageService.Repositories
                 if (messages == null)
                 {
                     _logger.LogWarning("No messages found for chat room {ChatRoomId}", chatRoomId);
-                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
+                    throw new EntityNotFoundException("Messages", chatRoomId);
                 }
 
                 var encryptedMessages = messages.Select(m => m.Content).ToList();
@@ -332,7 +331,13 @@ namespace MessageService.Repositories
                     .OrderByDescending(m => m.CreatedAt)
                     .FirstAsync();
 
-                // Розшифровуємо вміст через gRPC
+                if (lastMessage == null)
+                {
+                    _logger.LogWarning("No messages found for chat room {ChatRoomId}", chatRoomId);
+                    throw new EntityNotFoundException("Messages", chatRoomId);
+                }
+
+                    // Розшифровуємо вміст через gRPC
                 string decryptedContent;
                 try
                 {
@@ -377,9 +382,8 @@ namespace MessageService.Repositories
 
                 if (message == null)
                 {
-                    // Якщо повідомлення вже видалено, це не помилка
-                    _logger.LogInformation("Повідомлення {MessageId} не знайдено для видалення", messageId);
-                    return;
+                    _logger.LogWarning("Повідомлення {MessageId} не знайдено для видалення", messageId);
+                    throw new EntityNotFoundException("Message", messageId);
                 }
 
                 _context.Messages.Remove(message);
@@ -407,47 +411,73 @@ namespace MessageService.Repositories
             }
         }
 
-        public async Task<bool> DeleteAllMessagesByChatRoomIdAsync(int chatRoomId)
+        public async Task<(bool Success, int DeletedCount)> DeleteAllMessagesByChatRoomIdAsync(int chatRoomId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
+                // Перевіряємо, чи вже було виконано операцію видалення
+                var processedEventKey = $"AllMessagesDeleted_{chatRoomId}";
+                var existingEvent = await _context.ProcessedEvents
+                    .FirstOrDefaultAsync(p => p.EventType == processedEventKey);
+
+                if (existingEvent != null)
+                {
+                    _logger.LogInformation("Операція видалення всіх повідомлень для чату {ChatRoomId} " +
+                        "вже була оброблена", chatRoomId);
+
+                    // Можна зберігати кількість видалених повідомлень в EventData як JSON
+                    int previousCount = 0;
+                    if (!string.IsNullOrEmpty(existingEvent.EventData))
+                    {
+                        previousCount = JsonSerializer.Deserialize<int>(existingEvent.EventData);
+                    }
+
+                    return (true, previousCount);
+                }
+
                 var messages = await _context.Messages
                     .Where(m => m.ChatRoomId == chatRoomId)
                     .ToListAsync();
 
-                if (messages.Count == 0)
+                int count = messages.Count;
+
+                if (count > 0)
                 {
-                    _logger.LogInformation("Повідомлень не знайдено для видалення в чаті {ChatRoomId}", chatRoomId);
-                    return true; // Немає повідомлень для видалення, вважаємо операцію успішною
+                    _context.Messages.RemoveRange(messages);
                 }
 
-                _context.Messages.RemoveRange(messages);
-
                 // Зберігаємо запис для забезпечення ідемпотентності
-                var processedEvent = new ProcessedEvent
+                // І додаємо кількість видалених повідомлень для майбутніх запитів
+                string eventData = JsonSerializer.Serialize(count);
+                _context.ProcessedEvents.Add(new ProcessedEvent
                 {
                     EventId = Guid.NewGuid(),
-                    EventType = $"AllMessagesDeleted_{chatRoomId}",
-                    ProcessedAt = DateTime.UtcNow
-                };
+                    EventType = processedEventKey,
+                    ProcessedAt = DateTime.UtcNow,
+                    EventData = eventData // Збереження додаткових даних
+                });
 
-                await _context.ProcessedEvents.AddAsync(processedEvent);
                 await _context.SaveChangesAsync();
-
                 await transaction.CommitAsync();
 
                 _logger.LogInformation("Успішно видалено {Count} повідомлень з чату {ChatRoomId}",
-                    messages.Count, chatRoomId);
+                    count, chatRoomId);
 
-                return true;
+                return (true, count);
             }
             catch (DbUpdateException ex)
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Помилка бази даних при видаленні повідомлень для чату {ChatRoomId}", chatRoomId);
                 throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Непередбачена помилка при видаленні повідомлень для чату {ChatRoomId}", chatRoomId);
+                throw;
             }
         }
 

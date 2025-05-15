@@ -17,6 +17,7 @@ namespace Shared.Sagas
     {
         public Guid CorrelationId { get; set; }
         public int ChatRoomId { get; set; }
+        public int InitiatedByUserId { get; set; }
     }
 
     public class MessagesDeletedEvent
@@ -24,6 +25,7 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int ChatRoomId { get; set; }
         public int MessageCount { get; set; }
+        public DateTime DeletedAt { get; set; } = DateTime.UtcNow;
     }
 
     public class ErrorEvent
@@ -43,5 +45,18 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int ChatRoomId { get; set; }
         public string Message { get; set; } = string.Empty;
+    }
+
+    public class DeleteMessagesSagaTimeoutEvent
+    {
+        public Guid CorrelationId { get; set; }
+        public string TimeoutReason { get; set; } = string.Empty;
+    }
+
+    public class CompensateMessagesDeleteCommand
+    {
+        public Guid CorrelationId { get; set; }
+        public int ChatRoomId { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 }

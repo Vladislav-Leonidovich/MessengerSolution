@@ -1,12 +1,19 @@
-﻿namespace MessageServiceDTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace MessageServiceDTOs
 {
     public class SendMessageDto
     {
         // Ідентифікатор чату, в який надсилається повідомлення
+        [Required]
         public int ChatRoomId { get; set; }
+        [Required]
         public ChatRoomType ChatRoomType { get; set; }
 
         // Текст повідомлення
+        [Required]
+        [MinLength(1)]
+        [MaxLength(4000)]
         public string Content { get; set; } = null!;
     }
 }

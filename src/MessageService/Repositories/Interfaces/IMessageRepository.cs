@@ -13,7 +13,7 @@ namespace MessageService.Repositories.Interfaces
         Task<int> GetMessagesCountByChatRoomIdAsync(int chatRoomId);
         Task<MessageDto> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId);
         Task DeleteMessageByIdAsync(int messageId);
-        Task<bool> DeleteAllMessagesByChatRoomIdAsync(int chatRoomId);
+        Task<(bool Success, int DeletedCount)> DeleteAllMessagesByChatRoomIdAsync(int chatRoomId);
         Task<MessageDto> MarkMessageAsReadByIdAsync(int messageId);
         Task<MessageDto> GetMessageByIdAsync(int messageId);
         Task<MessageDto?> FindMessageByCorrelationIdAsync(Guid correlationId);

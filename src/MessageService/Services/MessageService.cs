@@ -67,11 +67,6 @@ namespace MessageService.Services
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message);
             }
-            catch (ValidationException ex)
-            {
-                _logger.LogWarning(ex.Message);
-                return ApiResponse<MessageDto>.Fail(ex.Message, ex.Errors.Values.SelectMany(e => e).ToList());
-            }
             catch (DatabaseException ex)
             {
                 _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
@@ -107,6 +102,11 @@ namespace MessageService.Services
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<IEnumerable<MessageDto>>.Fail(ex.Message);
             }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при отриманні повідомлення");
+                return ApiResponse<IEnumerable<MessageDto>>.Fail("Помилка при роботі з базою даних");
+            }
             catch (ForbiddenAccessException ex)
             {
                 _logger.LogWarning(ex.Message);
@@ -140,6 +140,11 @@ namespace MessageService.Services
             {
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<int>.Fail(ex.Message);
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при отриманні кількості повідомлень");
+                return ApiResponse<int>.Fail("Помилка при роботі з базою даних");
             }
             catch (ForbiddenAccessException ex)
             {
@@ -188,6 +193,11 @@ namespace MessageService.Services
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message);
             }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при позначенні повідомлення як прочитане");
+                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
+            }
             catch (ForbiddenAccessException ex)
             {
                 _logger.LogWarning(ex.Message);
@@ -222,6 +232,11 @@ namespace MessageService.Services
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<MessageDto>.Fail(ex.Message);
             }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при отриманні останнього повідомлення");
+                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
+            }
             catch (ForbiddenAccessException ex)
             {
                 _logger.LogWarning(ex.Message);
@@ -244,7 +259,7 @@ namespace MessageService.Services
                 var messageDto = await _messageRepository.GetMessageByIdAsync(messageId);
 
                 // Перевіряємо, чи має користувач право видаляти це повідомлення
-                if (messageDto.SenderUserId != userId)
+                /*if (messageDto.SenderUserId != userId)
                 {
                     // Перевіряємо, чи є користувач адміністратором чату через gRPC
                     bool isAdmin = await _chatGrpcClient.CheckAdminAccessAsync(userId, messageDto.ChatRoomId);
@@ -252,7 +267,7 @@ namespace MessageService.Services
                     {
                         throw new ForbiddenAccessException("Лише відправник або адміністратор чату може видаляти повідомлення");
                     }
-                }
+                }*/
 
                 // Видаляємо повідомлення через репозиторій
                 await _messageRepository.DeleteMessageByIdAsync(messageId);
@@ -272,6 +287,11 @@ namespace MessageService.Services
             {
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при видаленні повідомлення");
+                return ApiResponse<bool>.Fail("Помилка при роботі з базою даних");
             }
             catch (ForbiddenAccessException ex)
             {
@@ -293,11 +313,11 @@ namespace MessageService.Services
             {
                 // Перевіряємо, чи має користувач право видаляти повідомлення з цього чату
                 // Зазвичай це може робити лише адміністратор чату
-                bool isAdmin = await _chatGrpcClient.CheckAdminAccessAsync(userId, chatRoomId);
+                /*bool isAdmin = await _chatGrpcClient.CheckAdminAccessAsync(userId, chatRoomId);
                 if (!isAdmin)
                 {
                     throw new ForbiddenAccessException("Лише адміністратор чату може видаляти всі повідомлення");
-                }
+                }*/
 
                 // Перевіряємо існування чату
                 var chatExists = await _chatGrpcClient.CheckAccessAsync(userId, chatRoomId);
@@ -323,6 +343,11 @@ namespace MessageService.Services
             {
                 _logger.LogWarning(ex.Message);
                 return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при видаленні повідомлень");
+                return ApiResponse<bool>.Fail("Помилка при роботі з базою даних");
             }
             catch (ForbiddenAccessException ex)
             {

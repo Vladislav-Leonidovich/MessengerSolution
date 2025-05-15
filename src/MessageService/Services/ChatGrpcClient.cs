@@ -124,7 +124,7 @@ namespace MessageService.Services
             }
         }
 
-        public async Task<bool> CheckAdminAccessAsync(int userId, int chatRoomId)
+        /*public async Task<bool> CheckAdminAccessAsync(int userId, int chatRoomId)
         {
             try
             {
@@ -149,7 +149,7 @@ namespace MessageService.Services
                     userId, chatRoomId);
                 return false;
             }
-        }
+        }*/
 
         private IAsyncPolicy CreateResiliencePolicy()
         {
