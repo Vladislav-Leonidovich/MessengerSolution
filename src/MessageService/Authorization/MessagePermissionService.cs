@@ -2,6 +2,7 @@
 {
     using MessageService.Data;
     using MessageService.Repositories;
+    using MessageService.Repositories.Interfaces;
     using MessageService.Services.Interfaces;
     using Microsoft.EntityFrameworkCore;
     using Shared.Authorization;
@@ -12,11 +13,11 @@
     {
         public class MessagePermissionService : IPermissionService<MessagePermission>
         {
-            private readonly MessageRepository _messageRepository;
+            private readonly IMessageRepository _messageRepository;
             private readonly ILogger<MessagePermissionService> _logger;
             private readonly IChatGrpcClient _chatGrpcClient;
 
-            public MessagePermissionService(MessageRepository messageRepository, ILogger<MessagePermissionService> logger, IChatGrpcClient chatGrpcClient)
+            public MessagePermissionService(IMessageRepository messageRepository, ILogger<MessagePermissionService> logger, IChatGrpcClient chatGrpcClient)
             {
                 _messageRepository = messageRepository;
                 _logger = logger;

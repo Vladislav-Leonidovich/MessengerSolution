@@ -49,7 +49,6 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 var sendMessageDto = new SendMessageDto
                 {
                     ChatRoomId = context.Message.ChatRoomId,
-                    ChatRoomType = context.Message.ChatRoomType,
                     Content = context.Message.Content
                 };
 

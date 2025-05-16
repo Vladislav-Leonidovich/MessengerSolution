@@ -55,7 +55,6 @@ namespace MessageService.Services
                     CorrelationId = correlationId,
                     MessageId = tempMessageDto.Id,
                     ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
                     SenderUserId = userId,
                     Content = model.Content
                 });

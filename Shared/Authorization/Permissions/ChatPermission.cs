@@ -9,7 +9,9 @@ namespace Shared.Authorization.Permissions
     public enum ChatPermission
     {
         // Дозволи для чатів
+        CreateChat,
         ViewChat,
+        DeleteChat,
         AddUserToChat,
         RemoveUserFromChat,
         ManageChatSettings,
@@ -19,6 +21,7 @@ namespace Shared.Authorization.Permissions
         CreateFolder,
         UpdateFolder,
         DeleteFolder,
-        AssignChatToFolder
+        AssignChatToFolder,
+        UnassignChatToFolder
     }
 }

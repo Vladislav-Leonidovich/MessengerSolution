@@ -39,7 +39,6 @@ namespace MessageService.Controllers
         // GET: api/message/chat/{chatRoomId}?pageNumber=1&pageSize=20
         // Отримує список повідомлень для зазначеного чату
         [HttpGet("chat/{chatRoomId}")]
-        [RequirePermission(MessagePermission.ViewMessage)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> GetMessages(int chatRoomId, [FromQuery] int startIndex = 1, [FromQuery] int count = 20)
         {
             var userId = GetCurrentUserId();

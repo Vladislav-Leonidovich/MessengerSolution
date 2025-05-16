@@ -13,7 +13,6 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; } = Guid.NewGuid();
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
-        public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
         public string Content { get; set; } = string.Empty;
     }
@@ -24,7 +23,6 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
-        public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
         public string Content { get; set; } = string.Empty;
     }
@@ -43,7 +41,6 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
-        public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
         public string Content { get; set; } = string.Empty;
     }
@@ -84,7 +81,6 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
-        public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
     }
 

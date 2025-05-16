@@ -11,7 +11,6 @@ namespace MessageService.Sagas.MessageDelivery
         // Дані про повідомлення
         public int MessageId { get; set; }
         public int ChatRoomId { get; set; }
-        public ChatRoomType ChatRoomType { get; set; }
         public int SenderUserId { get; set; }
         public string EncryptedContent { get; set; } = string.Empty;
 

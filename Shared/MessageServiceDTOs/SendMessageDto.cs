@@ -7,8 +7,6 @@ namespace MessageServiceDTOs
         // Ідентифікатор чату, в який надсилається повідомлення
         [Required]
         public int ChatRoomId { get; set; }
-        [Required]
-        public ChatRoomType ChatRoomType { get; set; }
 
         // Текст повідомлення
         [Required]

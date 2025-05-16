@@ -14,11 +14,13 @@ namespace ChatService.Controllers
     public class FolderController : ControllerBase
     {
         private readonly IFolderService _folderService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<FolderController> _logger;
 
-        public FolderController(IFolderService folderService, ILogger<FolderController> logger)
+        public FolderController(IFolderService folderService, IHttpContextAccessor httpContextAccessor, ILogger<FolderController> logger)
         {
             _folderService = folderService;
+            _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
 
@@ -26,26 +28,27 @@ namespace ChatService.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFolders()
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.GetFoldersAsync(userId);
             return Ok(result);
         }
 
         // GET: api/folder/{folderId}
         [HttpGet("{folderId}")]
-        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу
+        [RequirePermission(ChatPermission.ViewFolder)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> GetFolderById(int folderId)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.GetFolderByIdAsync(folderId, userId);
             return Ok(result);
         }
 
         // POST: api/folder/create
         [HttpPost("create")]
+        [RequirePermission(ChatPermission.CreateFolder)]
         public async Task<IActionResult> CreateFolder([FromBody] CreateFolderDto model)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.CreateFolderAsync(model, userId);
 
             if (!result.Success)
@@ -58,10 +61,10 @@ namespace ChatService.Controllers
 
         // PUT: api/folder/update
         [HttpPut("update")]
-        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу через FolderId в моделі
+        [RequirePermission(ChatPermission.UpdateFolder)] // Використовуємо атрибут для перевірки доступу через FolderId в моделі
         public async Task<IActionResult> UpdateFolder([FromBody] FolderDto model)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.UpdateFolderAsync(model, userId);
 
             if (!result.Success)
@@ -74,10 +77,10 @@ namespace ChatService.Controllers
 
         // DELETE: api/folder/delete/{folderId}
         [HttpDelete("delete/{folderId}")]
-        [RequireFolderAccess] // Використовуємо атрибут для перевірки доступу
+        [RequirePermission(ChatPermission.DeleteFolder)] // Використовуємо атрибут для перевірки доступу
         public async Task<IActionResult> DeleteFolder(int folderId)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.DeleteFolderAsync(folderId, userId);
 
             if (!result.Success)
@@ -90,11 +93,10 @@ namespace ChatService.Controllers
 
         // POST: api/folder/{folderId}/assign-private-chat/{chatId}
         [HttpPost("{folderId}/assign-private-chat/{chatId}")]
-        [RequireFolderAccess] // Перевіряємо доступ до папки
-        [RequirePermission(ChatPermission.AssignChatToFolder)]
+        [RequirePermission(ChatPermission.AssignChatToFolder)] // Перевіряємо доступ до папки
         public async Task<IActionResult> AssignPrivateChatToFolder(int folderId, int chatId)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.AssignChatToFolderAsync(chatId, folderId, false, userId);
 
             if (!result.Success)
@@ -107,9 +109,10 @@ namespace ChatService.Controllers
 
         // POST: api/folder/{folderId}/unassign-private-chat/{chatId}
         [HttpPost("unassign-private-chat/{chatId}")]
+        [RequirePermission(ChatPermission.UnassignChatToFolder)] // Перевіряємо доступ до папки
         public async Task<IActionResult> UnassignPrivateChatFromFolder(int chatId)
         {
-            var userId = GetUserId();
+            var userId = GetCurrentUserId();
             var result = await _folderService.UnassignChatFromFolderAsync(chatId, false, userId);
 
             if (!result.Success)
@@ -121,9 +124,9 @@ namespace ChatService.Controllers
         }
 
         // Допоміжний метод для отримання ID користувача з токена
-        private int GetUserId()
+        private int GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
                 throw new UnauthorizedAccessException("Користувача не знайдено в токені.");

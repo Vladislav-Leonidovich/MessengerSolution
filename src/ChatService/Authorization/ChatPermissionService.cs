@@ -1,4 +1,7 @@
 ﻿using ChatService.Data;
+using ChatService.Repositories.Interfaces;
+using ChatServiceModels.Chats;
+using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using Shared.Authorization;
 using Shared.Authorization.Permissions;
@@ -8,12 +11,14 @@ namespace ChatService.Authorization
 {
     public class ChatPermissionService : IPermissionService<ChatPermission>
     {
-        private readonly ChatDbContext _context;
+        private readonly IChatRoomRepository _chatRoomRepository;
+        private readonly IFolderRepository _folderRepository;
         private readonly ILogger<ChatPermissionService> _logger;
 
-        public ChatPermissionService(ChatDbContext context, ILogger<ChatPermissionService> logger)
+        public ChatPermissionService(IChatRoomRepository chatRoomRepository, IFolderRepository folderRepository, ILogger<ChatPermissionService> logger)
         {
-            _context = context;
+            _chatRoomRepository = chatRoomRepository;
+            _folderRepository = folderRepository;
             _logger = logger;
         }
 
@@ -25,8 +30,14 @@ namespace ChatService.Authorization
 
             switch (permission)
             {
+                case ChatPermission.CreateChat:
+                    return true; // Будь-який авторизований користувач може створювати чати
+
                 case ChatPermission.ViewChat:
                     return await CanViewChatAsync(userId, resourceId);
+
+                case ChatPermission.DeleteChat:
+                    return await CanDeleteChatAsync(userId, resourceId);
 
                 case ChatPermission.AddUserToChat:
                 case ChatPermission.RemoveUserFromChat:
@@ -42,6 +53,7 @@ namespace ChatService.Authorization
                     // Будь-який авторизований користувач може створювати папки
                     return true;
 
+                case ChatPermission.UnassignChatToFolder:
                 case ChatPermission.AssignChatToFolder:
                     return await CanAssignChatToFolderAsync(userId, resourceId);
 
@@ -61,21 +73,38 @@ namespace ChatService.Authorization
             }
         }
 
+        private async Task<bool> CanDeleteChatAsync(int userId, int? chatRoomId)
+        {
+            if (!chatRoomId.HasValue) return false;
+
+            var chatRoomType = await _chatRoomRepository.GetChatRoomTypeByIdAsync(chatRoomId.Value);
+
+            switch (chatRoomType)
+            {
+                case ChatRoomType.privateChat:
+                    return await _chatRoomRepository.UserBelongsToChatAsync(userId, chatRoomId.Value);
+                case ChatRoomType.groupChat:
+                    return await IsOwnerOrAdminAsync(userId, chatRoomId);
+                default:
+                    return false;
+            }
+        }
+
         private async Task<bool> CanViewChatAsync(int userId, int? chatRoomId)
         {
             if (!chatRoomId.HasValue) return false;
 
-            // Перевірка для приватного чату
-            var isPrivateChatMember = await _context.UserChatRooms
-                .AnyAsync(ucr => ucr.PrivateChatRoomId == chatRoomId && ucr.UserId == userId);
+            var chatRoomType = await _chatRoomRepository.GetChatRoomTypeByIdAsync(chatRoomId.Value);
 
-            if (isPrivateChatMember) return true;
-
-            // Перевірка для групового чату
-            var isGroupChatMember = await _context.GroupChatMembers
-                .AnyAsync(gcm => gcm.GroupChatRoomId == chatRoomId && gcm.UserId == userId);
-
-            return isGroupChatMember;
+            switch(chatRoomType)
+            {
+                case ChatRoomType.privateChat:
+                    return await _chatRoomRepository.CanAccessPrivateChatAsync(userId, chatRoomId.Value);
+                case ChatRoomType.groupChat:
+                    return await _chatRoomRepository.CanAccessGroupChatAsync(userId, chatRoomId.Value);
+                default:
+                    return false;
+            }
         }
 
         private async Task<bool> IsOwnerOrAdminAsync(int userId, int? chatRoomId)
@@ -83,17 +112,14 @@ namespace ChatService.Authorization
             if (!chatRoomId.HasValue) return false;
 
             // Перевіряємо, чи є користувач власником
-            var isOwner = await _context.GroupChatRooms
-                .AnyAsync(gcr => gcr.Id == chatRoomId && gcr.OwnerId == userId);
+            var isOwner = await _chatRoomRepository
+                .GetOwnerGroupChatAsync(chatRoomId.Value) == userId;
 
             if (isOwner) return true;
 
             // Перевіряємо, чи є адміністратором
-            var isAdmin = await _context.GroupChatMembers
-                .AnyAsync(gcm =>
-                    gcm.GroupChatRoomId == chatRoomId &&
-                    gcm.UserId == userId &&
-                    gcm.Role == ChatServiceModels.Chats.GroupRole.Admin);
+            var isAdmin = await _chatRoomRepository
+                .GetUserRoleInGroupChatAsync(userId, chatRoomId.Value) == GroupRole.Admin;
 
             return isAdmin;
         }
@@ -102,8 +128,7 @@ namespace ChatService.Authorization
         {
             if (!folderId.HasValue) return false;
 
-            return await _context.Folders
-                .AnyAsync(f => f.Id == folderId.Value && f.UserId == userId);
+            return await _folderRepository.IsFolderOwnerAsync(userId, folderId.Value);
         }
 
         private async Task<bool> CanAssignChatToFolderAsync(int userId, int? chatRoomId)

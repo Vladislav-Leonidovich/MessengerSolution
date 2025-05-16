@@ -6,6 +6,7 @@ namespace ChatService.Services.Interfaces
 {
     public interface IChatService
     {
+        Task<ApiResponse<dynamic>> GetChatByIdAsync(int chatRoomId, int userId);
         Task<ApiResponse<ChatRoomDto>> GetPrivateChatByIdAsync(int chatRoomId, int userId);
         Task<ApiResponse<GroupChatRoomDto>> GetGroupChatByIdAsync(int chatRoomId, int userId);
         Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsForUserAsync(int userId);
@@ -16,8 +17,9 @@ namespace ChatService.Services.Interfaces
         Task<ApiResponse<IEnumerable<GroupChatRoomDto>>> GetGroupChatsWithoutFolderAsync(int userId);
         Task<ApiResponse<ChatRoomDto>> CreatePrivateChatAsync(CreatePrivateChatRoomDto dto, int userId);
         Task<ApiResponse<GroupChatRoomDto>> CreateGroupChatAsync(CreateGroupChatRoomDto dto, int userId);
-        Task<ApiResponse<bool>> DeletePrivateChatAsync(int chatRoomId, int userId);
-        Task<ApiResponse<bool>> DeleteGroupChatAsync(int chatRoomId, int userId);
+        Task<ApiResponse<bool>> DeleteChatByIdAsync(int chatRoomId, int userId);
+        Task<ApiResponse<bool>> DeletePrivateChatByIdAsync(int chatRoomId, int userId);
+        Task<ApiResponse<bool>> DeleteGroupChatByIdAsync(int chatRoomId, int userId);
         Task<bool> IsUserInChatAsync(int userId, int chatRoomId);
     }
 }

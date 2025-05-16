@@ -168,7 +168,6 @@ namespace MessageService.Repositories
                     {
                         Id = existingMessage.Id,
                         ChatRoomId = existingMessage.ChatRoomId,
-                        ChatRoomType = existingMessage.ChatRoomType,
                         SenderUserId = existingMessage.SenderUserId,
                         Content = decryptedContent,
                         CreatedAt = existingMessage.CreatedAt,
@@ -196,7 +195,6 @@ namespace MessageService.Repositories
                 var message = new Message
                 {
                     ChatRoomId = model.ChatRoomId,
-                    ChatRoomType = model.ChatRoomType,
                     SenderUserId = userId,
                     Content = encryptedContent,
                     CreatedAt = DateTime.UtcNow,
@@ -230,7 +228,6 @@ namespace MessageService.Repositories
                 {
                     Id = message.Id,
                     ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
                     SenderUserId = message.SenderUserId,
                     Content = model.Content, // Оригінальний текст
                     CreatedAt = message.CreatedAt,
@@ -353,7 +350,6 @@ namespace MessageService.Repositories
                 {
                     Id = lastMessage.Id,
                     ChatRoomId = lastMessage.ChatRoomId,
-                    ChatRoomType = lastMessage.ChatRoomType,
                     SenderUserId = lastMessage.SenderUserId,
                     Content = decryptedContent,
                     CreatedAt = lastMessage.CreatedAt,
@@ -518,7 +514,6 @@ namespace MessageService.Repositories
                 {
                     Id = message.Id,
                     ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
                     SenderUserId = message.SenderUserId,
                     Content = decryptedContent,
                     CreatedAt = message.CreatedAt,
@@ -570,7 +565,6 @@ namespace MessageService.Repositories
                 {
                     Id = message.Id,
                     ChatRoomId = message.ChatRoomId,
-                    ChatRoomType = message.ChatRoomType,
                     SenderUserId = message.SenderUserId,
                     Content = message.Content,
                     CreatedAt = message.CreatedAt,

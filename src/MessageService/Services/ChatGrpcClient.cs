@@ -95,14 +95,13 @@ namespace MessageService.Services
             }
         }
 
-        public async Task<List<int>> GetChatParticipantsAsync(int chatRoomId, ChatRoomType chatRoomType)
+        public async Task<List<int>> GetChatParticipantsAsync(int chatRoomId)
         {
             try
             {
                 var request = new GetChatParticipantsRequest
                 {
-                    ChatRoomId = chatRoomId,
-                    ChatRoomType = (int)chatRoomType
+                    ChatRoomId = chatRoomId
                 };
 
                 var response = await _resiliencePolicy.ExecuteAsync(async () =>

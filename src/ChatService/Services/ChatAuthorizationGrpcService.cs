@@ -4,6 +4,8 @@ using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
 using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
+using ChatService.Repositories;
+using ChatService.Repositories.Interfaces;
 
 namespace ChatService.Services
 {
@@ -11,13 +13,16 @@ namespace ChatService.Services
     public class ChatAuthorizationGrpcService : Shared.Protos.ChatAuthorizationService.ChatAuthorizationServiceBase
     {
         private readonly IChatAuthorizationService _authService;
+        private readonly IChatRoomRepository _chatRoomRepository;
         private readonly ILogger<ChatAuthorizationGrpcService> _logger;
 
         public ChatAuthorizationGrpcService(
             IChatAuthorizationService authService,
+            IChatRoomRepository chatRoomRepository,
             ILogger<ChatAuthorizationGrpcService> logger)
         {
             _authService = authService;
+            _chatRoomRepository = chatRoomRepository;
             _logger = logger;
         }
 
@@ -91,31 +96,29 @@ namespace ChatService.Services
         {
             try
             {
-                _logger.LogInformation("Отримано gRPC-запит на отримання учасників чату {ChatRoomId}, тип {ChatRoomType}",
-                    request.ChatRoomId, request.ChatRoomType);
+                _logger.LogInformation("Отримано gRPC-запит на отримання учасників чату {ChatRoomId}",
+                    request.ChatRoomId);
 
                 // Отримуємо тип чату
-                var chatRoomType = (ChatRoomType)request.ChatRoomType;
+                var chatRoomType = await _chatRoomRepository.GetChatRoomTypeByIdAsync(request.ChatRoomId);
                 var participants = new List<int>();
 
-                // Залежно від типу чату
-                if (chatRoomType == ChatRoomType.privateChat)
+                switch(chatRoomType)
                 {
-                    // Отримуємо учасників приватного чату
-                    var userChatRooms = await _context.UserChatRooms
-                        .Where(ucr => ucr.PrivateChatRoomId == request.ChatRoomId)
-                        .ToListAsync();
-
-                    participants = userChatRooms.Select(ucr => ucr.UserId).ToList();
-                }
-                else if (chatRoomType == ChatRoomType.groupChat)
-                {
-                    // Отримуємо учасників групового чату
-                    var groupChatMembers = await _context.GroupChatMembers
-                        .Where(gcm => gcm.GroupChatRoomId == request.ChatRoomId)
-                        .ToListAsync();
-
-                    participants = groupChatMembers.Select(gcm => gcm.UserId).ToList();
+                    case ChatRoomType.privateChat:
+                        // Отримуємо учасників приватного чату
+                        participants = await _chatRoomRepository.GetChatParticipantsFromPrivateChatAsync(request.ChatRoomId);
+                        break;
+                    case ChatRoomType.groupChat:
+                        // Отримуємо учасників групового чату
+                        participants = await _chatRoomRepository.GetChatParticipantsFromGroupChatAsync(request.ChatRoomId);
+                        break;
+                    default:
+                        return new GetChatParticipantsResponse
+                        {
+                            Success = false,
+                            ErrorMessage = "Невідомий тип чату"
+                        };
                 }
 
                 return new GetChatParticipantsResponse

@@ -39,6 +39,53 @@ namespace ChatService.Services
             _logger = logger;
         }
 
+        public async Task<ApiResponse<dynamic>> GetChatByIdAsync(int chatRoomId, int userId)
+        {
+            try
+            {
+                // Перевірка доступу
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
+
+                // Отримання базової інформації про чат
+                var chatRoom = await _chatRoomRepository.GetChatRoomTypeByIdAsync(chatRoomId);
+
+                // Залежно від типу повертаємо відповідне DTO
+                if (chatRoom == ChatRoomType.privateChat)
+                {
+                    var privateChat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
+                    if (privateChat == null)
+                    {
+                        throw new EntityNotFoundException("PrivateChat", chatRoomId);
+                    }
+                    return ApiResponse<dynamic>.Ok(privateChat);
+                }
+                else
+                {
+                    var groupChat = await _chatRoomRepository.GetGroupChatByIdAsync(chatRoomId);
+                    if (groupChat == null)
+                    {
+                        throw new EntityNotFoundException("GroupChat", chatRoomId);
+                    }
+                    return ApiResponse<dynamic>.Ok(groupChat);
+                }
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<dynamic>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<dynamic>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні чату {ChatId}", chatRoomId);
+                return ApiResponse<dynamic>.Fail("Сталася внутрішня помилка сервера");
+            }
+        }
+
         public async Task<ApiResponse<ChatRoomDto>> GetPrivateChatByIdAsync(int chatRoomId, int userId)
         {
             try
@@ -99,7 +146,44 @@ namespace ChatService.Services
             }
         }
 
-        public async Task<ApiResponse<bool>> DeletePrivateChatAsync(int chatRoomId, int userId)
+        public async Task<ApiResponse<bool>> DeleteChatByIdAsync(int chatRoomId, int userId)
+        {
+            try
+            {
+                // Перевірка доступу
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
+
+                // Видалення чату
+                var result = await _chatRoomRepository.DeleteChatAsync(chatRoomId);
+
+                if (result)
+                {
+                    // Публікація події видалення чату
+                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+
+                    return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
+                }
+
+                return ApiResponse<bool>.Fail("Не вдалося видалити чат");
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при видаленні приватного чату {ChatId}", chatRoomId);
+                throw;
+            }
+        }
+
+        public async Task<ApiResponse<bool>> DeletePrivateChatByIdAsync(int chatRoomId, int userId)
         {
             try
             {
@@ -112,7 +196,7 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatEvents { ChatRoomId = chatRoomId });
+                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
 
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
@@ -264,7 +348,7 @@ namespace ChatService.Services
             }
         }
 
-        public async Task<ApiResponse<bool>> DeleteGroupChatAsync(int chatRoomId, int userId)
+        public async Task<ApiResponse<bool>> DeleteGroupChatByIdAsync(int chatRoomId, int userId)
         {
             try
             {
@@ -275,7 +359,7 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatEvents { ChatRoomId = chatRoomId });
+                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
                 return ApiResponse<bool>.Fail("Не вдалося видалити чат");

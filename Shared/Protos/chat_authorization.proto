@@ -36,7 +36,6 @@ message ChatAccessResult {
 
 message GetChatParticipantsRequest {
   int32 chat_room_id = 1;
-  int32 chat_room_type = 2;
 }
 
 message GetChatParticipantsResponse {

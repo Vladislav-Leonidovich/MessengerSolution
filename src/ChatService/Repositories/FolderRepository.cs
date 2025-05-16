@@ -1,4 +1,5 @@
 ﻿using ChatService.Data;
+using ChatService.Models;
 using ChatService.Repositories.Interfaces;
 using ChatServiceDTOs.Folders;
 using Microsoft.EntityFrameworkCore;
@@ -70,7 +71,7 @@ namespace ChatService.Repositories
             try
             {
                 // Створюємо нову папку
-                var folder = new ChatService.Models.Folder
+                var folder = new Folder
                 {
                     Name = dto.Name,
                     Order = dto.Order,
@@ -216,6 +217,18 @@ namespace ChatService.Repositories
                 _logger.LogError(ex, "Помилка бази даних при видаленні чату {ChatId} з папки", chatId);
                 throw new DatabaseException("Помилка при видаленні чату з папки", ex);
             }
+        }
+        public async Task<bool> CanAccessFolderAsync(int userId, int folderId)
+        {
+            return await _context.Folders
+                .AnyAsync(f => f.Id == folderId && f.UserId == userId);
+        }
+
+        public async Task<bool> IsFolderOwnerAsync(int userId, int folderId)
+        {
+            var folder = await _context.Folders
+                .FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == userId);
+            return folder != null;
         }
     }
 }

@@ -11,5 +11,7 @@ namespace ChatService.Repositories.Interfaces
         Task<bool> DeleteFolderAsync(int folderId);
         Task<bool> AssignChatToFolderAsync(int chatId, int folderId, bool isGroupChat);
         Task<bool> UnassignChatFromFolderAsync(int chatId, bool isGroupChat);
+        Task<bool> CanAccessFolderAsync(int userId, int folderId);
+        Task<bool> IsFolderOwnerAsync(int userId, int folderId);
     }
 }

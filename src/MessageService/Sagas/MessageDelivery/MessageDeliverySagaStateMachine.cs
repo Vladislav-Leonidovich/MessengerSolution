@@ -38,7 +38,6 @@ namespace MessageService.Sagas.MessageDelivery
                         // Ініціалізація даних саги
                         context.Saga.MessageId = context.Message.MessageId;
                         context.Saga.ChatRoomId = context.Message.ChatRoomId;
-                        context.Saga.ChatRoomType = context.Message.ChatRoomType;
                         context.Saga.SenderUserId = context.Message.SenderUserId;
                         context.Saga.CreatedAt = DateTime.UtcNow;
                     })
@@ -47,7 +46,6 @@ namespace MessageService.Sagas.MessageDelivery
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Message.MessageId,
                         ChatRoomId = context.Message.ChatRoomId,
-                        ChatRoomType = context.Message.ChatRoomType,
                         SenderUserId = context.Message.SenderUserId,
                         Content = context.Message.Content
                     })
@@ -69,7 +67,6 @@ namespace MessageService.Sagas.MessageDelivery
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Message.MessageId,
                         ChatRoomId = context.Saga.ChatRoomId,
-                        ChatRoomType = context.Saga.ChatRoomType,
                         SenderUserId = context.Saga.SenderUserId,
                         Content = context.Message.EncryptedContent
                     })
@@ -142,7 +139,6 @@ namespace MessageService.Sagas.MessageDelivery
                             CorrelationId = context.Message.CorrelationId,
                             MessageId = context.Saga.MessageId,
                             ChatRoomId = context.Saga.ChatRoomId,
-                            ChatRoomType = context.Saga.ChatRoomType,
                             SenderUserId = context.Saga.SenderUserId
                         });
                     }),

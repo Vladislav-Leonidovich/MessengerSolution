@@ -34,7 +34,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
 
                 // Отримуємо учасників чату через gRPC
                 var participants = await _chatGrpcClient.GetChatParticipantsAsync(
-                    context.Message.ChatRoomId, context.Message.ChatRoomType);
+                    context.Message.ChatRoomId);
 
                 // Видаляємо відправника зі списку учасників
                 int senderUserId = context.Message.SenderUserId;

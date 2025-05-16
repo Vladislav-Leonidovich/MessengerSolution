@@ -75,7 +75,6 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 {
                     Id = context.Message.MessageId,
                     ChatRoomId = context.Message.ChatRoomId,
-                    ChatRoomType = context.Message.ChatRoomType,
                     SenderUserId = context.Message.SenderUserId,
                     Content = content, // Розшифрований вміст
                     CreatedAt = DateTime.UtcNow,

@@ -26,6 +26,27 @@ namespace ChatService.Repositories
             _httpClientFactory = httpClientFactory;
         }
 
+        public async Task<ChatRoomType> GetChatRoomTypeByIdAsync(int chatRoomId)
+        {
+            try
+            {
+                var chat = await _context.ChatRooms
+                    .FirstOrDefaultAsync(cr => cr.Id == chatRoomId);
+                if (chat == null)
+                {
+                    _logger.LogWarning("Чат з ID {ChatId} не знайдено", chatRoomId);
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
+                }
+                return chat.ChatRoomType;
+            }
+
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при отриманні чату {ChatId}", chatRoomId);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
         public async Task<ChatRoomDto?> GetPrivateChatByIdAsync(int chatRoomId)
         {
             try
@@ -37,7 +58,7 @@ namespace ChatService.Repositories
                 if (chat == null)
                 {
                     _logger.LogWarning("Приватний чат з ID {ChatId} не знайдено", chatRoomId);
-                    return null;
+                    throw new EntityNotFoundException("PrivateChatRoom", chatRoomId);
                 }
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
@@ -70,7 +91,7 @@ namespace ChatService.Repositories
                 if (chat == null)
                 {
                     _logger.LogWarning("Груповий чат з ID {ChatId} не знайдено", chatRoomId);
-                    return null;
+                    throw new EntityNotFoundException("GroupChatRoom", chatRoomId);
                 }
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
@@ -106,8 +127,13 @@ namespace ChatService.Repositories
                     .Where(pcr => pcr.UserChatRooms.Any(ucr => ucr.UserId == userId))
                     .ToListAsync();
 
-                var result = new List<ChatRoomDto>();
+                if (privateChats == null || !privateChats.Any())
+                {
+                    _logger.LogWarning("Приватні чати для користувача {UserId} не знайдено", userId);
+                    throw new EntityNotFoundException("PrivateChatRoom", userId);
+                }
 
+                var result = new List<ChatRoomDto>();
                 foreach (var chat in privateChats)
                 {
                     var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
@@ -185,19 +211,19 @@ namespace ChatService.Repositories
                 }
 
                 // Створюємо новий приватний чат
-                var privateChatRoom = new ChatService.Models.PrivateChatRoom
+                var privateChatRoom = new PrivateChatRoom
                 {
-                    ChatRoomType = MessageServiceDTOs.ChatRoomType.privateChat,
+                    ChatRoomType = ChatRoomType.privateChat,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 // Додаємо учасників чату
-                privateChatRoom.UserChatRooms.Add(new ChatService.Models.UserChatRoom
+                privateChatRoom.UserChatRooms.Add(new UserChatRoom
                 {
                     UserId = currentUserId
                 });
 
-                privateChatRoom.UserChatRooms.Add(new ChatService.Models.UserChatRoom
+                privateChatRoom.UserChatRooms.Add(new UserChatRoom
                 {
                     UserId = dto.UserId
                 });
@@ -221,6 +247,30 @@ namespace ChatService.Repositories
             {
                 _logger.LogError(ex, "Помилка бази даних при створенні приватного чату");
                 throw new DatabaseException("Помилка при створенні приватного чату", ex);
+            }
+        }
+
+        public async Task<bool> DeleteChatAsync(int chatRoomId)
+        {
+            try
+            {
+                var chat = await _context.ChatRooms
+                    .FirstOrDefaultAsync(c => c.Id == chatRoomId);
+
+                if (chat == null)
+                {
+                    _logger.LogWarning("Спроба видалити неіснуючий приватний чат {ChatId}", chatRoomId);
+                    throw new EntityNotFoundException("ChatRoom", chatRoomId);
+                }
+
+                _context.ChatRooms.Remove(chat);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при видаленні приватного чату {ChatId}", chatRoomId);
+                throw new DatabaseException("Помилка при видаленні приватного чату", ex);
             }
         }
 
@@ -256,6 +306,13 @@ namespace ChatService.Repositories
                     .Include(gcr => gcr.GroupChatMembers)
                     .Where(gcr => gcr.GroupChatMembers.Any(gcm => gcm.UserId == userId))
                     .ToList();
+
+                if (groupChats == null || !groupChats.Any())
+                {
+                    _logger.LogWarning("Групові чати для користувача {UserId} не знайдено", userId);
+                    throw new EntityNotFoundException("GroupChatRoom", userId);
+                }
+
                 var result = new List<GroupChatRoomDto>();
                 foreach (var chat in groupChats)
                 {
@@ -521,6 +578,80 @@ namespace ChatService.Repositories
                 _logger.LogError(ex, "Помилка бази даних при видаленні групового чату {ChatId}", chatRoomId);
                 throw new DatabaseException("Помилка при видаленні групового чату", ex);
             }
+        }
+
+        public async Task<bool> CanAccessPrivateChatAsync(int userId, int chatRoomId)
+        {
+            return await _context.UserChatRooms
+                .AnyAsync(ucr => ucr.PrivateChatRoomId == chatRoomId && ucr.UserId == userId);
+        }
+
+        public async Task<bool> CanAccessGroupChatAsync(int userId, int chatRoomId)
+        {
+            return await _context.GroupChatMembers
+                .AnyAsync(gcm => gcm.GroupChatRoomId == chatRoomId && gcm.UserId == userId);
+        }
+
+        public async Task<int> GetOwnerGroupChatAsync(int chatRoomId)
+        {
+            var chat = await _context.GroupChatRooms
+                .FirstOrDefaultAsync(c => c.Id == chatRoomId);
+            if (chat == null)
+            {
+                _logger.LogWarning("Спроба отримати власника неіснуючого групового чату {ChatId}", chatRoomId);
+                throw new EntityNotFoundException("GroupChatRoom", chatRoomId);
+            }
+            return chat.OwnerId;
+        }
+
+        public async Task<GroupRole> GetUserRoleInGroupChatAsync(int userId, int chatRoomId)
+        {
+            var chatMember = await _context.GroupChatMembers
+                .FirstOrDefaultAsync(gcm => gcm.GroupChatRoomId == chatRoomId && gcm.UserId == userId);
+            if (chatMember == null)
+            {
+                _logger.LogWarning("Спроба отримати роль неіснуючого учасника чату {ChatId}", chatRoomId);
+                throw new EntityNotFoundException("GroupChatMember", userId);
+            }
+            return chatMember.Role;
+        }
+
+        public async Task<List<int>> GetChatParticipantsFromPrivateChatAsync(int chatRoomId)
+        {
+            var chat = await _context.PrivateChatRooms
+                .Include(pcr => pcr.UserChatRooms)
+                .FirstOrDefaultAsync(pcr => pcr.Id == chatRoomId);
+
+            if (chat == null)
+            {
+                _logger.LogWarning("Спроба отримати учасників неіснуючого приватного чату {ChatId}", chatRoomId);
+                throw new EntityNotFoundException("PrivateChatRoom", chatRoomId);
+            }
+
+            var participants = chat.UserChatRooms
+                .Select(ucr => ucr.UserId)
+                .ToList();
+
+            return participants;
+        }
+
+        public async Task<List<int>> GetChatParticipantsFromGroupChatAsync(int chatRoomId)
+        {
+            var chat = await _context.GroupChatRooms
+                .Include(gcr => gcr.GroupChatMembers)
+                .FirstOrDefaultAsync(gcr => gcr.Id == chatRoomId);
+
+            if (chat == null)
+            {
+                _logger.LogWarning("Спроба отримати учасників неіснуючого приватного чату {ChatId}", chatRoomId);
+                throw new EntityNotFoundException("PrivateChatRoom", chatRoomId);
+            }
+
+            var participants = chat.GroupChatMembers
+                .Select(gcm => gcm.UserId)
+                .ToList();
+
+            return participants;
         }
 
         // Вспоміжні методи для отримання даних

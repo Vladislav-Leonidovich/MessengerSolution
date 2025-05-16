@@ -1,4 +1,5 @@
-﻿using MassTransit;
+﻿using System.Text.Json;
+using MassTransit;
 using Shared.Sagas;
 
 namespace ChatService.Sagas.ChatCreation

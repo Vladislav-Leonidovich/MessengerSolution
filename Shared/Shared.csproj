@@ -14,13 +14,13 @@
 
   <ItemGroup>
     <None Update="Protos\chat_authorization.proto">
-      <GrpcServices>Client</GrpcServices>
+      <GrpcServices>Both</GrpcServices>
     </None>
     <None Update="Protos\encryption.proto">
-      <GrpcServices>Client</GrpcServices>
+      <GrpcServices>Both</GrpcServices>
     </None>
     <None Update="Protos\message_info.proto">
-      <GrpcServices>Server</GrpcServices>
+      <GrpcServices>Both</GrpcServices>
     </None>
   </ItemGroup>
 

@@ -12,8 +12,6 @@ namespace MessageService.Models
         // Ідентифікатор чату (особистого або групового)
         public int ChatRoomId { get; set; }
 
-        public ChatRoomType ChatRoomType { get; set; }
-
         // Ідентифікатор користувача-відправника
         public int SenderUserId { get; set; }
 
