@@ -86,17 +86,17 @@ namespace ChatService.Sagas.ChatCreation
         }
 
         // Состояния
-        public State CreatingChatRoom { get; private set; }
-        public State NotifyingMessageService { get; private set; }
-        public State Completed { get; private set; }
-        public State Compensating { get; private set; }
-        public State Failed { get; private set; }
+        public State? CreatingChatRoom { get; private set; }
+        public State? NotifyingMessageService { get; private set; }
+        public State? Completed { get; private set; }
+        public State? Compensating { get; private set; }
+        public State? Failed { get; private set; }
 
         // События
-        public Event<ChatCreationStartedEvent> ChatCreationStarted { get; private set; }
-        public Event<ChatRoomCreatedEvent> ChatRoomCreated { get; private set; }
-        public Event<MessageServiceNotifiedEvent> MessageServiceNotified { get; private set; }
-        public Event<ChatCreationFailedEvent> FailureOccurred { get; private set; }
-        public Event<ChatCreationCompensatedEvent> ChatCreationCompensated { get; private set; }
+        public Event<ChatCreationStartedEvent>? ChatCreationStarted { get; private set; }
+        public Event<ChatRoomCreatedEvent>? ChatRoomCreated { get; private set; }
+        public Event<MessageServiceNotifiedEvent>? MessageServiceNotified { get; private set; }
+        public Event<ChatCreationFailedEvent>? FailureOccurred { get; private set; }
+        public Event<ChatCreationCompensatedEvent>? ChatCreationCompensated { get; private set; }
     }
 }

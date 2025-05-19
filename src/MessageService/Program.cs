@@ -31,7 +31,7 @@ builder.Services.AddDbContext<MessageDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 
 builder.Services.AddDbContext<MessageDeliverySagaDbContext>(options =>
-    options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
+    options.UseMySQL(builder.Configuration.GetConnectionString("SagaDatabase")));
 
 builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
@@ -41,6 +41,12 @@ builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
 builder.Services.AddScoped<IPermissionService<MessagePermission>, MessagePermissionService>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();
+builder.Services.AddScoped<SaveMessageCommandConsumer>();
+builder.Services.AddScoped<PublishMessageCommandConsumer>();
+builder.Services.AddScoped<CheckDeliveryStatusCommandConsumer>();
+builder.Services.AddScoped<MessageDeliveredToUserEventConsumer>();
+builder.Services.AddScoped<DeleteChatMessagesCommandConsumer>();
+builder.Services.AddScoped<SendChatNotificationCommandConsumer>();
 
 builder.Services.AddSingleton<IEncryptionGrpcClient, EncryptionGrpcClient>();
 builder.Services.AddSingleton<IChatGrpcClient, ChatGrpcClient>();
@@ -95,6 +101,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<SaveMessageCommandConsumer>();
     x.AddConsumer<PublishMessageCommandConsumer>();
     x.AddConsumer<CheckDeliveryStatusCommandConsumer>();
+    x.AddConsumer<MessageDeliveredToUserEventConsumer>();
 
     // Реєстрація консьюмерів для Outbox
 

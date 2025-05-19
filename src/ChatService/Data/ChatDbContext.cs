@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ChatService.Models;
+using Shared.Contracts;
 
 namespace ChatService.Data
 {
@@ -16,7 +17,8 @@ namespace ChatService.Data
         public DbSet<UserChatRoom> UserChatRooms { get; set; }
         public DbSet<GroupChatMember> GroupChatMembers { get; set; }
         public DbSet<Folder> Folders { get; set; }
-
+        public DbSet<OutboxMessage> OutboxMessages { get; set; }
+        public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -55,6 +57,20 @@ namespace ChatService.Data
             modelBuilder.Entity<Folder>()
                 .Property(f => f.UserId)
                 .IsRequired();
+
+            // Конфігурація для ProcessedEvent
+            modelBuilder.Entity<ProcessedEvent>()
+                .HasKey(p => new { p.EventId, p.EventType });
+
+            modelBuilder.Entity<ProcessedEvent>()
+                .HasIndex(p => p.ProcessedAt);
+
+            // Конфігурація для OutboxMessage
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(o => o.ProcessedAt);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(o => o.CreatedAt);
         }
     }
 }

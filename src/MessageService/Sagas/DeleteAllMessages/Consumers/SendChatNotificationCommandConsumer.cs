@@ -1,12 +1,14 @@
 ﻿using MassTransit;
+using MessageService.Data;
 using MessageService.Hubs;
 using MessageService.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
+using Shared.Consumers;
 using Shared.Sagas;
 
 namespace MessageService.Sagas.DeleteAllMessages.Consumers
 {
-    public class SendChatNotificationCommandConsumer : IConsumer<SendChatNotificationCommand>
+    public class SendChatNotificationCommandConsumer : IdempotentConsumer<SendChatNotificationCommand, MessageDbContext>
     {
         private readonly IHubContext<MessageHub> _hubContext;
         private readonly IChatGrpcClient _chatGrpcClient;
@@ -15,35 +17,38 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
         public SendChatNotificationCommandConsumer(
             IHubContext<MessageHub> hubContext,
             IChatGrpcClient chatGrpcClient,
+            MessageDbContext dbContext,
             ILogger<SendChatNotificationCommandConsumer> logger)
+            : base(dbContext, logger)
         {
             _hubContext = hubContext;
             _chatGrpcClient = chatGrpcClient;
             _logger = logger;
         }
 
-        public async Task Consume(ConsumeContext<SendChatNotificationCommand> context)
+        protected override async Task ProcessEventAsync(ConsumeContext<SendChatNotificationCommand> context)
         {
+            var command = context.Message;
+
+            _logger.LogInformation("Надсилання сповіщень про видалення повідомлень. " +
+                "ChatRoomId: {ChatRoomId}, CorrelationId: {CorrelationId}",
+                command.ChatRoomId, command.CorrelationId);
+
             try
             {
-                _logger.LogInformation("Надсилання сповіщень про видалення повідомлень. " +
-                    "ChatRoomId: {ChatRoomId}, CorrelationId: {CorrelationId}",
-                    context.Message.ChatRoomId, context.Message.CorrelationId);
-
                 // Отримуємо учасників чату через gRPC
                 var participants = await _chatGrpcClient.GetChatParticipantsAsync(
-                    context.Message.ChatRoomId,
-                    MessageServiceDTOs.ChatRoomType.privateChat); // Або визначте тип динамічно
+                    command.ChatRoomId);
 
                 if (participants == null || !participants.Any())
                 {
                     _logger.LogWarning("Не знайдено учасників для чату {ChatRoomId}",
-                        context.Message.ChatRoomId);
+                        command.ChatRoomId);
 
                     // Все одно публікуємо подію успіху з 0 отримувачів
                     await context.Publish(new NotificationsSentEvent
                     {
-                        CorrelationId = context.Message.CorrelationId,
+                        CorrelationId = command.CorrelationId,
                         RecipientCount = 0
                     });
                     return;
@@ -53,13 +58,13 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
                 var notification = new
                 {
                     Type = "MessagesDeleted",
-                    ChatRoomId = context.Message.ChatRoomId,
-                    Message = context.Message.Message,
+                    ChatRoomId = command.ChatRoomId,
+                    Message = command.Message,
                     Timestamp = DateTime.UtcNow
                 };
 
                 // Надсилаємо сповіщення всім учасникам чату через SignalR
-                var groupName = context.Message.ChatRoomId.ToString();
+                var groupName = command.ChatRoomId.ToString();
                 await _hubContext.Clients.Group(groupName)
                     .SendAsync("ChatMessagesDeleted", notification);
 
@@ -73,8 +78,8 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
                             .SendAsync("ChatUpdate", new
                             {
                                 Action = "MessagesDeleted",
-                                ChatRoomId = context.Message.ChatRoomId,
-                                Details = context.Message.Message
+                                ChatRoomId = command.ChatRoomId,
+                                Details = command.Message
                             });
                     }
                     catch (Exception ex)
@@ -86,26 +91,28 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
                 }
 
                 _logger.LogInformation("Сповіщення надіслано {Count} учасникам чату {ChatRoomId}",
-                    participants.Count, context.Message.ChatRoomId);
+                    participants.Count, command.ChatRoomId);
 
                 // Публікуємо подію успішного надсилання сповіщень
                 await context.Publish(new NotificationsSentEvent
                 {
-                    CorrelationId = context.Message.CorrelationId,
+                    CorrelationId = command.CorrelationId,
                     RecipientCount = participants.Count
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка при надсиланні сповіщень для чату {ChatRoomId}",
-                    context.Message.ChatRoomId);
+                    command.ChatRoomId);
 
                 // Публікуємо подію помилки
                 await context.Publish(new ErrorEvent
                 {
-                    CorrelationId = context.Message.CorrelationId,
+                    CorrelationId = command.CorrelationId,
                     ErrorMessage = $"Помилка надсилання сповіщень: {ex.Message}"
                 });
+
+                throw; // Перекидаємо виняток для базового класу
             }
         }
     }

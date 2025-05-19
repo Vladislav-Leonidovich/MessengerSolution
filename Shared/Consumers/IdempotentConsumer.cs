@@ -12,12 +12,14 @@ using Shared.Contracts;
 
 namespace Shared.Consumers
 {
-    public abstract class IdempotentConsumer<TEvent> : IConsumer<TEvent> where TEvent : class
+    public abstract class IdempotentConsumer<TEvent, TDbContext> : IConsumer<TEvent>
+        where TEvent : class
+        where TDbContext : DbContext
     {
-        private readonly DbContext _dbContext;
+        private readonly TDbContext _dbContext;
         private readonly ILogger _logger;
 
-        protected IdempotentConsumer(DbContext dbContext, ILogger logger)
+        protected IdempotentConsumer(TDbContext dbContext, ILogger logger)
         {
             _dbContext = dbContext;
             _logger = logger;
@@ -28,7 +30,7 @@ namespace Shared.Consumers
             var eventId = GetEventId(context.Message);
             var eventType = typeof(TEvent).Name;
 
-            // Проверка на устаревшие события
+            // Перевірка на застарілі події
             if (IsEventExpired(context.Message))
             {
                 _logger.LogWarning("Подія {EventType} з ID {EventId} застаріла і буде пропущена",
@@ -36,7 +38,7 @@ namespace Shared.Consumers
                 return;
             }
 
-            // Проверка, не было ли уже обработано это событие
+            // Перевірка, чи не було вже оброблено цю подію
             var alreadyProcessed = await _dbContext.Set<ProcessedEvent>()
                 .AnyAsync(pe => pe.EventId == eventId && pe.EventType == eventType);
 
@@ -47,12 +49,14 @@ namespace Shared.Consumers
                 return;
             }
 
+            // Використовуємо транзакцію для обробки
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
-                // Выполнение бизнес-логики
-                await ProcessEventAsync(context.Message);
+                // Виконання бізнес-логіки
+                await ProcessEventAsync(context);
 
-                // Запись о том, что событие обработано
+                // Запис про те, що подія оброблена
                 _dbContext.Set<ProcessedEvent>().Add(new ProcessedEvent
                 {
                     EventId = eventId,
@@ -61,26 +65,30 @@ namespace Shared.Consumers
                 });
 
                 await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Помилка під час обробки події {EventType} з ID {EventId}",
                     eventType, eventId);
                 throw; // Пробрасываем исключение для повторной обработки сообщения
             }
         }
 
-        protected abstract Task ProcessEventAsync(TEvent @event);
+        protected abstract Task ProcessEventAsync(ConsumeContext<TEvent> context);
 
         protected virtual Guid GetEventId(TEvent @event)
         {
-            // По умолчанию используем свойство EventId, если оно есть
-            if (@event is MessageEventBase messageEvent)
+            // Основна реалізація GetEventId як у поточному коді
+            // По замовчуванню використовуємо властивість CorrelationId, якщо вона є
+            var correlationIdProperty = @event.GetType().GetProperty("CorrelationId");
+            if (correlationIdProperty != null && correlationIdProperty.PropertyType == typeof(Guid))
             {
-                return messageEvent.EventId;
+                return (Guid)correlationIdProperty.GetValue(@event);
             }
 
-            // Иначе создаем детерминированный ID на основе содержимого события
+            // Інакше створюємо детермінований ID на основі вмісту події
             var json = JsonSerializer.Serialize(@event);
             using var sha = SHA256.Create();
             var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(json));
@@ -89,11 +97,13 @@ namespace Shared.Consumers
 
         protected virtual bool IsEventExpired(TEvent @event)
         {
-            // Если событие имеет свойство Timestamp
-            if (@event is MessageEventBase messageEvent)
+            // Отримуємо властивість Timestamp, якщо вона є
+            var timestampProperty = @event.GetType().GetProperty("Timestamp");
+            if (timestampProperty != null && timestampProperty.PropertyType == typeof(DateTime))
             {
-                // Возвращаем true, если событие старше 1 дня
-                return DateTime.UtcNow - messageEvent.Timestamp > TimeSpan.FromDays(1);
+                var timestamp = (DateTime)timestampProperty.GetValue(@event);
+                // Повертаємо true, якщо подія старша за 1 день
+                return DateTime.UtcNow - timestamp > TimeSpan.FromDays(1);
             }
 
             return false;

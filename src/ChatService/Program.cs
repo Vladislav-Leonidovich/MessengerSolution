@@ -14,6 +14,8 @@ using Microsoft.OpenApi.Models;
 using Shared.Authorization.Permissions;
 using Shared.Authorization;
 using ChatService.Services.Interfaces;
+using ChatService.BackgroundServices;
+using ChatService.Sagas.ChatCreation.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -90,8 +92,6 @@ builder.Services.AddMassTransit(x =>
         });
         cfg.ConfigureEndpoints(context);
     });
-
-    x.AddConsumer<ChatService.Consumers.MessageNotificationConsumer>();
 });
 
 // Реєстрація репозиторіїв
@@ -107,6 +107,15 @@ builder.Services.AddScoped<IChatAuthorizationService, ChatAuthorizationService>(
 
 // Реєстрація сервісу детальних дозволів
 builder.Services.AddScoped<IPermissionService<ChatPermission>, ChatPermissionService>();
+
+
+builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
+builder.Services.AddScoped<CreateChatRoomCommandConsumer>();
+builder.Services.AddScoped<NotifyMessageServiceCommandConsumer>();
+builder.Services.AddScoped<CompensateChatCreationCommandConsumer>();
+
+builder.Services.AddHostedService<OutboxProcessorService>();
+builder.Services.AddHostedService<OutboxCleanupService>();
 
 builder.Services.AddGrpc();
 

@@ -23,6 +23,7 @@ namespace ChatService.Repositories.Interfaces
         Task<bool> UserBelongsToChatAsync(int userId, int chatRoomId);
         Task<bool> CanAccessPrivateChatAsync(int userId, int chatRoomId);
         Task<bool> CanAccessGroupChatAsync(int userId, int chatRoomId);
+        Task<bool> CheckIfChatExistsAsync(int chatRoomId);
         Task<int> GetOwnerGroupChatAsync(int chatRoomId);
         Task<GroupRole> GetUserRoleInGroupChatAsync(int userId, int chatRoomId);
         Task<List<int>> GetChatParticipantsFromPrivateChatAsync(int chatRoomId);

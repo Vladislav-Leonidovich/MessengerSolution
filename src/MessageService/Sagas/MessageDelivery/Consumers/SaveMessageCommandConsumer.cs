@@ -1,43 +1,48 @@
 ﻿using MassTransit;
+using MessageService.Data;
 using MessageService.Repositories.Interfaces;
 using MessageServiceDTOs;
+using Shared.Consumers;
 using Shared.Sagas;
 
 namespace MessageService.Sagas.MessageDelivery.Consumers
 {
-    public class SaveMessageCommandConsumer : IConsumer<SaveMessageCommand>
+    public class SaveMessageCommandConsumer : IdempotentConsumer<SaveMessageCommand, MessageDbContext>
     {
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<SaveMessageCommandConsumer> _logger;
 
-
         public SaveMessageCommandConsumer(
             IMessageRepository messageRepository,
+            MessageDbContext dbContext,
             ILogger<SaveMessageCommandConsumer> logger)
+            : base(dbContext, logger)
         {
             _messageRepository = messageRepository;
             _logger = logger;
         }
 
-        public async Task Consume(ConsumeContext<SaveMessageCommand> context)
+        protected override async Task ProcessEventAsync(ConsumeContext<SaveMessageCommand> context)
         {
+            var command = context.Message;
+
+            _logger.LogInformation("Обробка команди SaveMessageCommand. MessageId: {MessageId}, CorrelationId: {CorrelationId}",
+                command.MessageId, command.CorrelationId);
+
             try
             {
-                _logger.LogInformation("Обробка команди SaveMessageCommand. MessageId: {MessageId}, CorrelationId: {CorrelationId}",
-                    context.Message.MessageId, context.Message.CorrelationId);
-
                 // Перевіряємо, чи вже існує повідомлення з таким CorrelationId
-                var existingMessage = await _messageRepository.FindMessageByCorrelationIdAsync(context.Message.CorrelationId);
+                var existingMessage = await _messageRepository.FindMessageByCorrelationIdAsync(command.CorrelationId);
 
                 if (existingMessage != null)
                 {
                     // Якщо повідомлення вже існує, публікуємо подію про успішне збереження
                     _logger.LogInformation("Знайдено існуюче повідомлення з ID {MessageId} для CorrelationId {CorrelationId}",
-                        existingMessage.Id, context.Message.CorrelationId);
+                        existingMessage.Id, command.CorrelationId);
 
                     await context.Publish(new MessageSavedEvent
                     {
-                        CorrelationId = context.Message.CorrelationId,
+                        CorrelationId = command.CorrelationId,
                         MessageId = existingMessage.Id,
                         EncryptedContent = existingMessage.Content
                     });
@@ -48,34 +53,36 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                 // Перетворення команди на DTO для збереження
                 var sendMessageDto = new SendMessageDto
                 {
-                    ChatRoomId = context.Message.ChatRoomId,
-                    Content = context.Message.Content
+                    ChatRoomId = command.ChatRoomId,
+                    Content = command.Content
                 };
 
                 // Збереження повідомлення в базу даних
                 var messageDto = await _messageRepository.CreateMessageForSagaAsync(
                     sendMessageDto,
-                    context.Message.SenderUserId,
-                    context.Message.CorrelationId);
+                    command.SenderUserId,
+                    command.CorrelationId);
 
                 // Публікація події успішного збереження
                 await context.Publish(new MessageSavedEvent
                 {
-                    CorrelationId = context.Message.CorrelationId,
+                    CorrelationId = command.CorrelationId,
                     MessageId = messageDto.Id,
                     EncryptedContent = messageDto.Content // Вже зашифрований вміст
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Помилка при збереженні повідомлення {MessageId}", context.Message.MessageId);
+                _logger.LogError(ex, "Помилка при збереженні повідомлення {MessageId}", command.MessageId);
 
                 await context.Publish(new MessageDeliveryFailedEvent
                 {
-                    CorrelationId = context.Message.CorrelationId,
-                    MessageId = context.Message.MessageId,
+                    CorrelationId = command.CorrelationId,
+                    MessageId = command.MessageId,
                     Reason = $"Помилка збереження повідомлення: {ex.Message}"
                 });
+
+                throw; // Перекидаємо виняток для базового класу, який відкотить транзакцію
             }
         }
     }

@@ -654,6 +654,19 @@ namespace ChatService.Repositories
             return participants;
         }
 
+        public async Task<bool> CheckIfChatExistsAsync(int chatRoomId)
+        {
+            try
+            {
+                return await _context.ChatRooms.AnyAsync(cr => cr.Id == chatRoomId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при перевірці існування чату {ChatId}", chatRoomId);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
         // Вспоміжні методи для отримання даних
         private async Task<string> GetChatNameAsync(PrivateChatRoom chat, int currentUserId = 0)
         {
