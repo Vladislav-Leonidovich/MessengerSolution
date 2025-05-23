@@ -19,6 +19,7 @@ namespace ChatService.Data
         public DbSet<Folder> Folders { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
         public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
+        public DbSet<ChatOperation> ChatOperations { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -71,6 +72,18 @@ namespace ChatService.Data
 
             modelBuilder.Entity<OutboxMessage>()
                 .HasIndex(o => o.CreatedAt);
+
+            modelBuilder.Entity<ChatOperation>()
+                .HasKey(co => co.CorrelationId);
+
+            modelBuilder.Entity<ChatOperation>()
+                .HasIndex(co => co.ChatRoomId);
+
+            modelBuilder.Entity<ChatOperation>()
+                .HasIndex(co => co.Status);
+
+            modelBuilder.Entity<ChatOperation>()
+                .HasIndex(co => co.CreatedAt);
         }
     }
 }

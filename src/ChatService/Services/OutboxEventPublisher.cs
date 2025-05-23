@@ -17,7 +17,6 @@ namespace ChatService.Services
             _logger = logger;
         }
 
-        // Метод для створення події без збереження в БД
         public async Task<OutboxMessage> CreateEventAsync<TEvent>(TEvent @event) where TEvent : class
         {
             var eventType = typeof(TEvent).Name;
@@ -31,32 +30,30 @@ namespace ChatService.Services
                 Id = Guid.NewGuid(),
                 EventType = eventType,
                 EventData = eventData,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                Status = OutboxMessageStatus.Pending
             };
 
             await _dbContext.OutboxMessages.AddAsync(outboxMessage);
 
-            _logger.LogInformation("Подія {EventType} з ID {EventId} підготовлена для збереження в Outbox",
+            _logger.LogInformation("Подія {EventType} з ID {EventId} підготовлена для Outbox",
                 eventType, outboxMessage.Id);
 
             return outboxMessage;
         }
 
-        // Метод для публікації події з використанням зовнішньої транзакції
         public async Task PublishInTransactionAsync<TEvent>(TEvent @event, IDbContextTransaction transaction)
             where TEvent : class
         {
             var outboxMessage = await CreateEventAsync(@event);
 
             _logger.LogInformation(
-                "Подія {EventType} з ID {EventId} додана до Outbox в рамках існуючої транзакції",
+                "Подія {EventType} з ID {EventId} додана до Outbox в рамках транзакції",
                 outboxMessage.EventType, outboxMessage.Id);
         }
 
-        // Основний метод публікації, який самостійно створює транзакцію
         public async Task PublishAsync<TEvent>(TEvent @event) where TEvent : class
         {
-            // Використовуємо власну транзакцію
             using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {

@@ -97,4 +97,14 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; }
         public int MessageId { get; set; }
     }
+
+    public class MessageDeliveryCompletedWithTimeoutEvent
+    {
+        public Guid CorrelationId { get; set; }
+        public int MessageId { get; set; }
+        public int ChatRoomId { get; set; }
+        public List<int> DeliveredToUserIds { get; set; } = new List<int>();
+        public bool TimedOut { get; set; }
+        public DateTime CompletedAt { get; set; } = DateTime.UtcNow;
+    }
 }

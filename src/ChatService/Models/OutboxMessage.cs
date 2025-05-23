@@ -16,5 +16,17 @@
         public int RetryCount { get; set; } = 0;
         // Помилка, якщо була
         public string? Error { get; set; }
+
+        public OutboxMessageStatus Status { get; set; } = OutboxMessageStatus.Pending;
+        public DateTime? NextRetryAt { get; set; }
+    }
+
+    public enum OutboxMessageStatus
+    {
+        Pending,      // Очікує обробки
+        Processing,   // В процесі обробки
+        Processed,    // Успішно оброблено
+        Failed,       // Не вдалося обробити
+        Cancelled     // Відмінено/скасовано
     }
 }

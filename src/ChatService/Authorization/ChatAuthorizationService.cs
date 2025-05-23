@@ -10,10 +10,10 @@ namespace ChatService.Authorization
     public class ChatAuthorizationService : IChatAuthorizationService
     {
         private readonly IChatRoomRepository _chatRoomRepository;
-        private readonly FolderRepository _folderRepository;
+        private readonly IFolderRepository _folderRepository;
         private readonly ILogger<ChatAuthorizationService> _logger;
 
-        public ChatAuthorizationService(IChatRoomRepository chatRoomRepository, FolderRepository folderRepository, ILogger<ChatAuthorizationService> logger)
+        public ChatAuthorizationService(IChatRoomRepository chatRoomRepository, IFolderRepository folderRepository, ILogger<ChatAuthorizationService> logger)
         {
             _chatRoomRepository = chatRoomRepository;
             _folderRepository = folderRepository;
@@ -98,7 +98,8 @@ namespace ChatService.Authorization
             // Перевіряємо, чи є користувач адміном
             var userRole = await _chatRoomRepository.GetUserRoleInGroupChatAsync(userId, chatRoomId);
 
-            return userRole == ChatServiceModels.Chats.GroupRole.Admin;
+            return userRole == ChatServiceModels.Chats.GroupRole.Owner ||
+           userRole == ChatServiceModels.Chats.GroupRole.Admin;
         }
     }
 }

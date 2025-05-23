@@ -17,6 +17,7 @@ namespace MessageService.Sagas.MessageDelivery
                 saga => saga.DeliveryTimeoutTokenId,
                 s => {
                     s.Received = r => r.CorrelateById(context => context.Message.CorrelationId);
+                    s.Delay = TimeSpan.FromMinutes(5);
                 });
 
             // Визначення подій та кореляція з інстансами саги

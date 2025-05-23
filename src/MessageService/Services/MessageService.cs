@@ -173,6 +173,11 @@ namespace MessageService.Services
                     await _authService.EnsureCanAccessChatRoomAsync(userId, messageDto.ChatRoomId);
                 }
 
+                if (messageDto.IsRead)
+                {
+                    return ApiResponse<MessageDto>.Fail("Повідомлення вже позначене як прочитане");
+                }
+
                 // Позначаємо повідомлення як прочитане через репозиторій
                 var updatedMessageDto = await _messageRepository.MarkMessageAsReadByIdAsync(messageId);
 

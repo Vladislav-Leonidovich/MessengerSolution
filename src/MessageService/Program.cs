@@ -26,7 +26,7 @@ using MessageService.Sagas.DeleteAllMessages.Consumers;
 using MessageService.Sagas.DeleteAllMessages;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddControllers();
 builder.Services.AddDbContext<MessageDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 

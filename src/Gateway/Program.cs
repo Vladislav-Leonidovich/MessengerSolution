@@ -1,5 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using Gateway.Extensions;
+using Gateway.HealthChecks;
+using Gateway.Middleware;
+using Gateway.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +14,15 @@ using Yarp.ReverseProxy;
 
 // Створення Builder для додатку
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+// Додаємо підтримку контролерів (наприклад, для health-check)
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddHostedService<ConfigurationMonitoringService>();
 
 // Додаємо CORS-політику
 builder.Services.AddCors(options =>
@@ -46,7 +59,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 // Реєстрація YARP (Reverse Proxy) та завантаження конфігурації з секції "ReverseProxy" з appsettings.json
 builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddProxyResiliencePolicies();
+
+builder.Services.AddHealthChecks()
+    .AddCheck<IdentityServiceHealthCheck>("identity_service", tags: new[] { "services" })
+    .AddCheck<ChatServiceHealthCheck>("chat_service", tags: new[] { "services" })
+    .AddCheck<MessageServiceHealthCheck>("message_service", tags: new[] { "services" })
+    .AddCheck<EncryptionServiceHealthCheck>("encryption_service", tags: new[] { "services" });
 
 if (builder.Environment.IsDevelopment())
 {
@@ -60,14 +80,17 @@ if (builder.Environment.IsDevelopment())
         });
 }
 
-// Додаємо підтримку контролерів (наприклад, для health-check)
-builder.Services.AddControllers();
-
 // Створюємо додаток
 var app = builder.Build();
 
 // Застосовуємо CORS-політику для всіх запитів
 app.UseCors("AllowAll");
+
+app.UseHttpsRedirection();
+
+app.UseMiddleware<ProxyErrorHandlingMiddleware>();
+
+app.UseRouting();
 
 app.UseAuthentication();
 
@@ -78,6 +101,8 @@ app.MapControllers();
 
 // Налаштування YARP: цей middleware буде пересилати запити до інших мікросервісів згідно з конфігурацією
 app.MapReverseProxy();
+
+app.MapHealthChecks("/health");
 
 // Запуск додатку
 app.Run();
