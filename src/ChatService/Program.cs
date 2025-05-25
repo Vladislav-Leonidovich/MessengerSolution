@@ -16,6 +16,8 @@ using Shared.Authorization;
 using ChatService.Services.Interfaces;
 using ChatService.BackgroundServices;
 using ChatService.Sagas.ChatCreation.Consumers;
+using ChatService.Configuration;
+using ChatService.Sagas.ChatCreation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,6 +66,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddAuthorization();
+builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
 
 // Реєструємо обробник
@@ -83,12 +87,67 @@ builder.Services.AddHttpClient("MessageClient", client =>
 
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<CreateChatRoomCommandConsumer>();
+    x.AddConsumer<NotifyMessageServiceCommandConsumer>();
+    x.AddConsumer<CompensateChatCreationCommandConsumer>();
+    x.AddConsumer<CompleteChatCreationCommandConsumer>();
+
+    x.ConfigureChatOperationConsumers();
+    x.AddSagaStateMachine<ChatCreationSagaStateMachine, ChatCreationSagaState>()
+        .EntityFrameworkRepository(r =>
+        {
+            r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
+            r.AddDbContext<DbContext, ChatDbContext>();
+        });
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host("rabbitmq://localhost", h =>
         {
             h.Username("guest");
             h.Password("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");
+        });
+        cfg.ReceiveEndpoint("chat-create-command", e =>
+        {
+            e.ConfigureConsumer<CreateChatRoomCommandConsumer>(context);
+            e.UseMessageRetry(r => r.Intervals(
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(15)
+            ));
+        });
+
+        cfg.ReceiveEndpoint("chat-notify-message-service", e =>
+        {
+            e.ConfigureConsumer<NotifyMessageServiceCommandConsumer>(context);
+            e.UseMessageRetry(r => r.Intervals(
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(15)
+            ));
+        });
+
+        cfg.ReceiveEndpoint("chat-compensate-creation", e =>
+        {
+            e.ConfigureConsumer<CompensateChatCreationCommandConsumer>(context);
+            e.UseMessageRetry(r => r.Intervals(
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(15)
+            ));
+        });
+
+        cfg.ReceiveEndpoint("chat-complete-creation", e =>
+        {
+            e.ConfigureConsumer<CompleteChatCreationCommandConsumer>(context);
+        });
+
+        // Конфігуруємо endpoint'и для ChatOperation
+        context.ConfigureChatOperationEndpoints(cfg);
+
+        // Конфігуруємо endpoint для саги
+        cfg.ReceiveEndpoint("chat-creation-saga", e =>
+        {
+            e.ConfigureSaga<ChatCreationSagaState>(context);
         });
         cfg.ConfigureEndpoints(context);
     });
@@ -116,7 +175,7 @@ builder.Services.AddScoped<CompensateChatCreationCommandConsumer>();
 
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();
-
+builder.Services.AddChatOperationServices();
 builder.Services.AddGrpc();
 
 builder.Services.AddControllers();

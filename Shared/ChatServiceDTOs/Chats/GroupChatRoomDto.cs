@@ -11,5 +11,6 @@ namespace ChatServiceDTOs.Chats
         public MessageDto LastMessagePreview { get; set; } = new MessageDto();
         public IEnumerable<GroupChatMemberDto> Members { get; set; } = new List<GroupChatMemberDto>();
         public ChatRoomType ChatRoomType { get; set; }
+        public int? FolderId { get; set; } = null;
     }
 }

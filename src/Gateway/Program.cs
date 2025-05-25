@@ -57,16 +57,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Реєстрація YARP (Reverse Proxy) та завантаження конфігурації з секції "ReverseProxy" з appsettings.json
-builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
-    .AddProxyResiliencePolicies();
-
 builder.Services.AddHealthChecks()
     .AddCheck<IdentityServiceHealthCheck>("identity_service", tags: new[] { "services" })
     .AddCheck<ChatServiceHealthCheck>("chat_service", tags: new[] { "services" })
     .AddCheck<MessageServiceHealthCheck>("message_service", tags: new[] { "services" })
     .AddCheck<EncryptionServiceHealthCheck>("encryption_service", tags: new[] { "services" });
+
+// Реєстрація YARP (Reverse Proxy) та завантаження конфігурації з секції "ReverseProxy" з appsettings.json
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddProxyResiliencePolicies();
+
 
 if (builder.Environment.IsDevelopment())
 {

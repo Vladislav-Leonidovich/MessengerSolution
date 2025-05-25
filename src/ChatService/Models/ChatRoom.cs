@@ -11,5 +11,7 @@ namespace ChatService.Models
         public int? FolderId { get; set; }
         public Folder? Folder { get; set; }
         public ChatRoomType ChatRoomType { get; set; }
+        public Guid? CorrelationId { get; set; }
+        public ICollection<ChatOperation> Operations { get; set; } = new List<ChatOperation>();
     }
 }

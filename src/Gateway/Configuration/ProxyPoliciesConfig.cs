@@ -17,7 +17,7 @@ namespace Gateway.Configuration
                     context.HttpContext.Request.EnableBuffering();
                 });
             })
-            .AddHealthChecks()
+            // Видалено некоректний виклик .AddHealthChecks()
             .ConfigureHttpClient((context, handler) =>
             {
                 // Налаштування Client-side circuit breaker

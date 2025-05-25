@@ -13,5 +13,6 @@ namespace ChatServiceDTOs.Chats
         // Список ідентифікаторів учасників
         public IEnumerable<int> ParticipantIds { get; set; } = new List<int>();
         public ChatRoomType ChatRoomType { get; set; }
+        public int? FolderId { get; set; } = null;
     }
 }

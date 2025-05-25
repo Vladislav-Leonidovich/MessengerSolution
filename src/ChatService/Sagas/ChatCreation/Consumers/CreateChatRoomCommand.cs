@@ -1,5 +1,7 @@
 ﻿using ChatService.Data;
+using ChatService.Models;
 using ChatService.Repositories.Interfaces;
+using ChatService.Services.Interfaces;
 using ChatServiceDTOs.Chats;
 using MassTransit;
 using Shared.Consumers;
@@ -10,15 +12,18 @@ namespace ChatService.Sagas.ChatCreation.Consumers
     public class CreateChatRoomCommandConsumer : IdempotentConsumer<CreateChatRoomCommand, ChatDbContext>
     {
         private readonly IChatRoomRepository _chatRoomRepository;
+        private readonly IChatOperationService _operationService;
         private readonly ILogger<CreateChatRoomCommandConsumer> _logger;
 
         public CreateChatRoomCommandConsumer(
             IChatRoomRepository chatRoomRepository,
+            IChatOperationService operationService,
             ChatDbContext dbContext,
             ILogger<CreateChatRoomCommandConsumer> logger)
             : base(dbContext, logger)
         {
             _chatRoomRepository = chatRoomRepository;
+            _operationService = operationService;
             _logger = logger;
         }
 
@@ -32,37 +37,38 @@ namespace ChatService.Sagas.ChatCreation.Consumers
 
             try
             {
-                // Перевіряємо, чи вже існує чат з таким ID
-                bool chatExists = false;
+                // Перевіряємо, чи операція вже існує
+                var existingOperation = await _operationService.GetOperationAsync(command.CorrelationId);
 
-                // Використовуємо існуючий ID чату або створюємо новий
-                if (command.ChatRoomId != 0)
+                if (existingOperation != null &&
+                    existingOperation.Status == ChatOperationStatus.Completed.ToString())
                 {
-                    // Перевіряємо, чи існує такий чат
-                    chatExists = await _chatRoomRepository.CheckIfChatExistsAsync(command.ChatRoomId);
+                    _logger.LogInformation(
+                        "Операція {CorrelationId} вже завершена",
+                        command.CorrelationId);
 
-                    if (chatExists)
+                    // Публікуємо подію про успішне створення
+                    await context.Publish(new ChatRoomCreatedEvent
                     {
-                        _logger.LogInformation("Чат з ID {ChatRoomId} вже існує. Продовжуємо сагу.",
-                            command.ChatRoomId);
-                    }
+                        CorrelationId = command.CorrelationId,
+                        ChatRoomId = existingOperation.ChatRoomId
+                    });
+
+                    return;
                 }
 
-                if (!chatExists)
+                // Створюємо новий груповий чат
+                var createGroupChatDto = new CreateGroupChatRoomDto
                 {
-                    // Створюємо новий груповий чат
-                    var createGroupChatDto = new CreateGroupChatRoomDto
-                    {
-                        Name = "Новий чат", // Можна налаштувати з параметрів команди
-                        MemberIds = command.MemberIds
-                    };
+                    Name = "Новий чат", // Можна налаштувати з параметрів команди
+                    MemberIds = command.MemberIds
+                };
 
-                    // Викликаємо репозиторій для створення чату
-                    var chatRoom = await _chatRoomRepository.CreateGroupChatAsync(
-                        createGroupChatDto, command.CreatorUserId);
+                // Викликаємо репозиторій для створення чату
+                var chatRoom = await _chatRoomRepository.CreateGroupChatAsync(
+                    createGroupChatDto, command.CreatorUserId);
 
-                    _logger.LogInformation("Створено новий чат з ID {ChatRoomId}", chatRoom.Id);
-                }
+                _logger.LogInformation("Створено новий чат з ID {ChatRoomId}", chatRoom.Id);
 
                 // Публікуємо подію успішного створення чату 
                 // (використовуємо context, який приходить з параметра)
