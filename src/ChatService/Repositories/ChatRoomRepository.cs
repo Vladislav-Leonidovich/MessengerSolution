@@ -7,6 +7,8 @@ using Shared.Exceptions;
 using Shared.IdentityServiceDTOs;
 using ChatService.Models;
 using ChatServiceModels.Chats;
+using ChatService.Mappers.Interfaces;
+using System;
 
 namespace ChatService.Repositories
 {
@@ -15,15 +17,18 @@ namespace ChatService.Repositories
         private readonly ChatDbContext _context;
         private readonly ILogger<ChatRoomRepository> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IMapperFactory _mapperFactory;
 
         public ChatRoomRepository(
             ChatDbContext context,
             ILogger<ChatRoomRepository> logger,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IMapperFactory mapperFactory)
         {
             _context = context;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
+            _mapperFactory = mapperFactory;
         }
 
         public async Task<ChatRoomType> GetChatRoomTypeByIdAsync(int chatRoomId)
@@ -63,15 +68,7 @@ namespace ChatService.Repositories
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
 
-                return new ChatRoomDto
-                {
-                    Id = chat.Id,
-                    CreatedAt = chat.CreatedAt,
-                    Name = await GetChatNameAsync(chat),
-                    ChatRoomType = chat.ChatRoomType,
-                    LastMessagePreview = lastMessagePreview,
-                    ParticipantIds = chat.UserChatRooms.Select(ucr => ucr.UserId).ToList()
-                };
+                return _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDto(chat);
             }
             catch (DbUpdateException ex)
             {
@@ -96,20 +93,7 @@ namespace ChatService.Repositories
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
 
-                return new GroupChatRoomDto
-                {
-                    Id = chat.Id,
-                    Name = chat.Name,
-                    CreatedAt = chat.CreatedAt,
-                    OwnerId = chat.OwnerId,
-                    ChatRoomType = chat.ChatRoomType,
-                    LastMessagePreview = lastMessagePreview,
-                    Members = chat.GroupChatMembers.Select(gcm => new GroupChatMemberDto
-                    {
-                        UserId = gcm.UserId,
-                        Role = gcm.Role
-                    }).ToList()
-                };
+                return _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDto(chat);
             }
             catch (DbUpdateException ex)
             {

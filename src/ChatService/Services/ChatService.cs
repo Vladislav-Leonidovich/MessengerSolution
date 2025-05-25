@@ -17,6 +17,7 @@ using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
 using Shared.Responses;
 using ChatService.Services.Interfaces;
+using ChatService.Mappers.Interfaces;
 
 namespace ChatService.Services
 {
@@ -24,20 +25,17 @@ namespace ChatService.Services
     {
         private readonly IChatRoomRepository _chatRoomRepository;
         private readonly IChatAuthorizationService _authService;
-        private readonly IChatOperationService _chatOperationService;
         private readonly IBus _bus;
         private readonly ILogger<ChatService> _logger;
 
         public ChatService(
             IChatRoomRepository chatRoomRepository,
             IChatAuthorizationService authService,
-            IChatOperationService chatOperationService,
             IBus bus,
             ILogger<ChatService> logger)
         {
             _chatRoomRepository = chatRoomRepository;
             _authService = authService;
-            _chatOperationService = chatOperationService;
             _bus = bus;
             _logger = logger;
         }
