@@ -3,10 +3,10 @@ using MassTransit;
 using MessageService.Data;
 using MessageService.Repositories;
 using MessageService.Repositories.Interfaces;
+using MessageService.Sagas.DeleteAllMessages.Events;
 using Microsoft.EntityFrameworkCore;
 using Shared.Consumers;
 using Shared.Contracts;
-using Shared.Sagas;
 
 namespace MessageService.Sagas.DeleteAllMessages.Consumers
 {

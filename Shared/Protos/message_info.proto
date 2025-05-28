@@ -11,6 +11,15 @@ service MessageInfoService {
   rpc GetLastMessagesBatch (LastMessagesBatchRequest) returns (LastMessagesBatchResponse);
 }
 
+enum MessageStatus {
+  CREATED = 0;
+  SAVED = 1;
+  PUBLISHED = 2;
+  PARTIALLY_DELIVERED = 3;
+  DELIVERED = 4;
+  FAILED = 5;
+}
+
 message LastMessageRequest {
   int32 chat_room_id = 1;
 }
@@ -25,7 +34,7 @@ message MessageData {
   optional google.protobuf.Timestamp read_at = 7;
   bool is_edited = 8;
   optional google.protobuf.Timestamp edited_at = 9;
-  int32 chat_room_type = 10;
+  MessageStatus status = 10;
 }
 
 message LastMessagesBatchRequest {

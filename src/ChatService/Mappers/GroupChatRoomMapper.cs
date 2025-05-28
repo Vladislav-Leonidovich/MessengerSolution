@@ -1,27 +1,32 @@
 ﻿using ChatService.Mappers.Interfaces;
 using ChatService.Models;
-using ChatServiceDTOs.Chats;
-using MessageServiceDTOs;
+using ChatService.Repositories.Interfaces;
+using ChatService.Services.Interfaces;
+using Shared.DTOs.Chat;
+using Shared.DTOs.Message;
 
 namespace ChatService.Mappers
 {
     public class GroupChatRoomMapper : BaseEntityMapper<GroupChatRoom, GroupChatRoomDto>
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IChatRoomRepository _chatRoomRepository;
         private readonly IEntityMapper<GroupChatMember, GroupChatMemberDto> _memberMapper;
         private readonly ILogger<GroupChatRoomMapper> _logger;
 
         public GroupChatRoomMapper(
             IHttpClientFactory httpClientFactory,
+            IChatRoomRepository chatRoomRepository,
             IEntityMapper<GroupChatMember, GroupChatMemberDto> memberMapper,
             ILogger<GroupChatRoomMapper> logger)
         {
             _httpClientFactory = httpClientFactory;
+            _chatRoomRepository = chatRoomRepository;
             _memberMapper = memberMapper;
             _logger = logger;
         }
 
-        public override GroupChatRoomDto MapToDto(GroupChatRoom entity)
+        public override GroupChatRoomDto MapToDto(GroupChatRoom entity, int? userId = null)
         {
             try
             {
@@ -38,8 +43,8 @@ namespace ChatService.Mappers
                     CreatedAt = entity.CreatedAt,
                     OwnerId = entity.OwnerId,
                     ChatRoomType = entity.ChatRoomType,
-                    Members = entity.GroupChatMembers?.Select(_memberMapper.MapToDto) ?? new List<GroupChatMemberDto>(),
-                    LastMessagePreview = GetLastMessagePreviewAsync(entity.Id).GetAwaiter().GetResult()
+                    Members = entity.GroupChatMembers?.Select(e => _memberMapper.MapToDto(e, userId)) ?? new List<GroupChatMemberDto>(),
+                    LastMessagePreview = _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id).GetAwaiter().GetResult()
                 };
             }
             catch (Exception ex)
@@ -49,7 +54,7 @@ namespace ChatService.Mappers
             }
         }
 
-        public async Task<GroupChatRoomDto> MapToDtoAsync(GroupChatRoom entity)
+        public new async Task<GroupChatRoomDto> MapToDtoAsync(GroupChatRoom entity, int? userId = null)
         {
             try
             {
@@ -66,8 +71,8 @@ namespace ChatService.Mappers
                     CreatedAt = entity.CreatedAt,
                     OwnerId = entity.OwnerId,
                     ChatRoomType = entity.ChatRoomType,
-                    Members = entity.GroupChatMembers?.Select(_memberMapper.MapToDto) ?? new List<GroupChatMemberDto>(),
-                    LastMessagePreview = await GetLastMessagePreviewAsync(entity.Id)
+                    Members = entity.GroupChatMembers?.Select(e => _memberMapper.MapToDto(e, userId)) ?? new List<GroupChatMemberDto>(),
+                    LastMessagePreview = await _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id)
                 };
             }
             catch (Exception ex)
@@ -113,7 +118,7 @@ namespace ChatService.Mappers
                 throw;
             }
         }
-        public IEnumerable<GroupChatRoomDto> MapToDtoCollection(IEnumerable<GroupChatRoom>? entities)
+        public new IEnumerable<GroupChatRoomDto> MapToDtoCollection(IEnumerable<GroupChatRoom>? entities, int? userId = null)
         {
             try
             {
@@ -123,17 +128,44 @@ namespace ChatService.Mappers
                     return Enumerable.Empty<GroupChatRoomDto>();
                 }
 
-                var collection = entities?.Select(e => MapToDto(e)) ?? Enumerable.Empty<GroupChatRoomDto>();
-                if (!collection.Any() || collection == null)
+                var collection = entities?.Select(e => MapToDto(e, userId)) ?? Enumerable.Empty<GroupChatRoomDto>();
+                if (!collection.Any())
                 {
-                    _logger.LogError("MapToDtoCollection is null.");
-                    throw new InvalidOperationException("MapToDtoCollection returned null or empty collection.");
+                    _logger.LogInformation("MapToDtoCollection is empty.");
                 }
+
                 return collection;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Помилка при мапінгу колекції PrivateChatRoom до ChatRoomDto");
+                _logger.LogError(ex, "Помилка при мапінгу колекції GroupChatRoom до GroupChatRoomDto");
+                throw;
+            }
+        }
+
+        public new async Task<IEnumerable<GroupChatRoomDto>> MapToDtoCollectionAsync(IEnumerable<GroupChatRoom>? entities, int? userId = null)
+        {
+            try
+            {
+                if (entities == null)
+                {
+                    _logger.LogWarning("MapToDtoCollection received null entities collection.");
+                    return Enumerable.Empty<GroupChatRoomDto>();
+                }
+
+                var tasks = entities.Select(e => MapToDtoAsync(e, userId));
+                var results = await Task.WhenAll(tasks);
+
+                if (!results.Any())
+                {
+                    _logger.LogInformation("MapToDtoCollectionAsync повернув порожню колекцію.");
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при мапінгу колекції GroupChatRoom до GroupChatRoomDto");
                 throw;
             }
         }
@@ -226,27 +258,6 @@ namespace ChatService.Mappers
             {
                 _logger.LogError(ex, "Помилка при оновленні учасників групового чату");
                 throw;
-            }
-        }
-
-        private async Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId)
-        {
-            try
-            {
-                var messageClient = _httpClientFactory.CreateClient("MessageClient");
-                var response = await messageClient.GetAsync($"api/message/get-last-message/{chatRoomId}");
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadFromJsonAsync<MessageDto>() ?? new MessageDto();
-                }
-
-                return new MessageDto();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні останнього повідомлення для чату {ChatId}", chatRoomId);
-                return new MessageDto();
             }
         }
     }

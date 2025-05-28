@@ -1,14 +1,14 @@
 ﻿using ChatService.Data;
 using ChatService.Repositories.Interfaces;
-using ChatServiceDTOs.Chats;
-using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using Shared.Exceptions;
-using Shared.IdentityServiceDTOs;
 using ChatService.Models;
-using ChatServiceModels.Chats;
 using ChatService.Mappers.Interfaces;
 using System;
+using Shared.DTOs.Chat;
+using Shared.DTOs.Identity;
+using Shared.DTOs.Message;
+using ChatService.Services.Interfaces;
 
 namespace ChatService.Repositories
 {
@@ -17,17 +17,20 @@ namespace ChatService.Repositories
         private readonly ChatDbContext _context;
         private readonly ILogger<ChatRoomRepository> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IMessageInfoGrpcService _messageInfoService;
         private readonly IMapperFactory _mapperFactory;
 
         public ChatRoomRepository(
             ChatDbContext context,
             ILogger<ChatRoomRepository> logger,
             IHttpClientFactory httpClientFactory,
+            IMessageInfoGrpcService messageInfoService,
             IMapperFactory mapperFactory)
         {
             _context = context;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
+            _messageInfoService = messageInfoService;
             _mapperFactory = mapperFactory;
         }
 
@@ -68,7 +71,7 @@ namespace ChatService.Repositories
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
 
-                return _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDto(chat);
+                return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoAsync(chat);
             }
             catch (DbUpdateException ex)
             {
@@ -93,7 +96,7 @@ namespace ChatService.Repositories
 
                 var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
 
-                return _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDto(chat);
+                return await _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDtoAsync(chat);
             }
             catch (DbUpdateException ex)
             {
@@ -117,23 +120,7 @@ namespace ChatService.Repositories
                     throw new EntityNotFoundException("PrivateChatRoom", userId);
                 }
 
-                var result = new List<ChatRoomDto>();
-                foreach (var chat in privateChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-
-                    result.Add(new ChatRoomDto
-                    {
-                        Id = chat.Id,
-                        CreatedAt = chat.CreatedAt,
-                        Name = await GetChatNameAsync(chat, userId),
-                        LastMessagePreview = lastMessagePreview,
-                        ChatRoomType = chat.ChatRoomType,
-                        ParticipantIds = chat.UserChatRooms.Select(ucr => ucr.UserId).ToList()
-                    });
-                }
-
-                return result;
+                return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoCollectionAsync(privateChats, userId);
             }
             catch (DbUpdateException ex)
             {
@@ -217,15 +204,7 @@ namespace ChatService.Repositories
                 await _context.SaveChangesAsync();
 
                 // Формуємо відповідь
-                return new ChatRoomDto
-                {
-                    Id = privateChatRoom.Id,
-                    CreatedAt = privateChatRoom.CreatedAt,
-                    Name = await GetChatNameAsync(privateChatRoom, currentUserId),
-                    ChatRoomType = privateChatRoom.ChatRoomType,
-                    ParticipantIds = privateChatRoom.UserChatRooms.Select(ucr => ucr.UserId).ToList(),
-                    LastMessagePreview = new MessageDto() // Порожнє повідомлення для нового чату
-                };
+                return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoAsync(privateChatRoom, currentUserId);
             }
             catch (DbUpdateException ex)
             {
@@ -297,26 +276,7 @@ namespace ChatService.Repositories
                     throw new EntityNotFoundException("GroupChatRoom", userId);
                 }
 
-                var result = new List<GroupChatRoomDto>();
-                foreach (var chat in groupChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-                    result.Add(new GroupChatRoomDto
-                    {
-                        Id = chat.Id,
-                        Name = chat.Name,
-                        CreatedAt = chat.CreatedAt,
-                        OwnerId = chat.OwnerId,
-                        ChatRoomType = chat.ChatRoomType,
-                        LastMessagePreview = lastMessagePreview,
-                        Members = chat.GroupChatMembers.Select(gcm => new GroupChatMemberDto
-                        {
-                            UserId = gcm.UserId,
-                            Role = gcm.Role
-                        }).ToList()
-                    });
-                }
-                return result;
+                return await _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDtoCollectionAsync(groupChats, userId);
             }
             catch (DbUpdateException ex)
             {
@@ -333,21 +293,8 @@ namespace ChatService.Repositories
                     .Include(pcr => pcr.UserChatRooms)
                     .Where(pcr => pcr.FolderId == folderId)
                     .ToList();
-                var result = new List<ChatRoomDto>();
-                foreach (var chat in privateChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-                    result.Add(new ChatRoomDto
-                    {
-                        Id = chat.Id,
-                        Name = await GetChatNameAsync(chat),
-                        CreatedAt = chat.CreatedAt,
-                        ChatRoomType = chat.ChatRoomType,
-                        LastMessagePreview = lastMessagePreview,
-                        ParticipantIds = chat.UserChatRooms.Select(ucr => ucr.UserId).ToList()
-                    });
-                }
-                return result;
+
+                return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoCollectionAsync(privateChats);
             }
             catch (DbUpdateException ex)
             {
@@ -364,26 +311,8 @@ namespace ChatService.Repositories
                     .Include(gcr => gcr.GroupChatMembers)
                     .Where(gcr => gcr.FolderId == folderId)
                     .ToList();
-                var result = new List<GroupChatRoomDto>();
-                foreach (var chat in groupChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-                    result.Add(new GroupChatRoomDto
-                    {
-                        Id = chat.Id,
-                        Name = chat.Name,
-                        CreatedAt = chat.CreatedAt,
-                        OwnerId = chat.OwnerId,
-                        ChatRoomType = chat.ChatRoomType,
-                        LastMessagePreview = lastMessagePreview,
-                        Members = chat.GroupChatMembers.Select(gcm => new GroupChatMemberDto
-                        {
-                            UserId = gcm.UserId,
-                            Role = gcm.Role
-                        }).ToList()
-                    });
-                }
-                return result;
+
+                return await _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDtoCollectionAsync(groupChats);
             }
             catch (DbUpdateException ex)
             {
@@ -400,21 +329,8 @@ namespace ChatService.Repositories
                     .Include(pcr => pcr.UserChatRooms)
                     .Where(pcr => pcr.UserChatRooms.Any(ucr => ucr.UserId == userId) && pcr.FolderId == null)
                     .ToList();
-                var result = new List<ChatRoomDto>();
-                foreach (var chat in privateChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-                    result.Add(new ChatRoomDto
-                    {
-                        Id = chat.Id,
-                        Name = await GetChatNameAsync(chat),
-                        CreatedAt = chat.CreatedAt,
-                        ChatRoomType = chat.ChatRoomType,
-                        LastMessagePreview = lastMessagePreview,
-                        ParticipantIds = chat.UserChatRooms.Select(ucr => ucr.UserId).ToList()
-                    });
-                }
-                return result;
+
+                return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoCollectionAsync(privateChats, userId);
             }
             catch (DbUpdateException ex)
             {
@@ -431,26 +347,8 @@ namespace ChatService.Repositories
                     .Include(gcr => gcr.GroupChatMembers)
                     .Where(gcr => gcr.GroupChatMembers.Any(gcm => gcm.UserId == userId) && gcr.FolderId == null)
                     .ToList();
-                var result = new List<GroupChatRoomDto>();
-                foreach (var chat in groupChats)
-                {
-                    var lastMessagePreview = await GetLastMessagePreviewAsync(chat.Id);
-                    result.Add(new GroupChatRoomDto
-                    {
-                        Id = chat.Id,
-                        Name = chat.Name,
-                        CreatedAt = chat.CreatedAt,
-                        OwnerId = chat.OwnerId,
-                        ChatRoomType = chat.ChatRoomType,
-                        LastMessagePreview = lastMessagePreview,
-                        Members = chat.GroupChatMembers.Select(gcm => new GroupChatMemberDto
-                        {
-                            UserId = gcm.UserId,
-                            Role = gcm.Role
-                        }).ToList()
-                    });
-                }
-                return result;
+
+                return await _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDtoCollectionAsync(groupChats);
             }
             catch (DbUpdateException ex)
             {
@@ -517,21 +415,7 @@ namespace ChatService.Repositories
                 _context.GroupChatRooms.Add(groupChatRoom);
                 await _context.SaveChangesAsync();
 
-                // Формуємо відповідь
-                return new GroupChatRoomDto
-                {
-                    Id = groupChatRoom.Id,
-                    CreatedAt = groupChatRoom.CreatedAt,
-                    Name = groupChatRoom.Name,
-                    ChatRoomType = groupChatRoom.ChatRoomType,
-                    Members = groupChatRoom.GroupChatMembers.Select(gcm => new GroupChatMemberDto
-                    {
-                        UserId = gcm.UserId,
-                        Role = gcm.Role
-                    }).ToList(),
-                    OwnerId = groupChatRoom.OwnerId,
-                    LastMessagePreview = new MessageDto() // Порожнє повідомлення для нового чату
-                };
+                return await _mapperFactory.GetMapper<GroupChatRoom, GroupChatRoomDto>().MapToDtoAsync(groupChatRoom);
             }
             catch (DbUpdateException ex)
             {
@@ -677,14 +561,12 @@ namespace ChatService.Repositories
             }
         }
 
-        private async Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId)
+        public async Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId)
         {
             try
             {
-                // Запит до сервісу повідомлень для отримання останнього повідомлення
-                var messageClient = _httpClientFactory.CreateClient("MessageClient");
-                var response = await messageClient.GetFromJsonAsync<MessageDto>($"api/message/get-last-message/{chatRoomId}");
-                return response ?? new MessageDto(); // Порожнє повідомлення, якщо нічого не знайдено
+                // Використовуємо gRPC-сервіс замість HTTP-запиту
+                return await _messageInfoService.GetLastMessageAsync(chatRoomId) ?? new MessageDto();
             }
             catch (Exception ex)
             {

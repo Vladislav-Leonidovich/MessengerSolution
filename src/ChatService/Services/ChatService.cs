@@ -1,23 +1,20 @@
 ﻿using System.Linq;
 using System.Security.Claims;
 using ChatService.Data;
-using ChatServiceDTOs.Chats;
-using ChatServiceModels.Chats;
 using ChatService.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http;
-using Shared.IdentityServiceDTOs;
-using MessageServiceDTOs;
 using System;
 using MassTransit;
 using Shared.Contracts;
 using ChatService.Authorization;
 using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
-using Shared.Responses;
 using ChatService.Services.Interfaces;
 using ChatService.Mappers.Interfaces;
+using Shared.DTOs.Chat;
+using Shared.DTOs.Responses;
 
 namespace ChatService.Services
 {

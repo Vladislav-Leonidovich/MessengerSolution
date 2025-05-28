@@ -1,8 +1,7 @@
 ﻿using Grpc.Core;
 using MassTransit;
 using MessageService.Services.Interfaces;
-using MessageServiceDTOs;
-using Shared.Sagas;
+using MessageService.Sagas.MessageDelivery.Events;
 
 namespace MessageService.Sagas.MessageDelivery
 {

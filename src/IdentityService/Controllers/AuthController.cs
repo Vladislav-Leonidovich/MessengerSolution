@@ -1,8 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using IdentityService.Models;
 using IdentityService.Services;
-using IdentityService.DTOs;
-using Shared.IdentityServiceDTOs;
+using Shared.DTOs.Identity;
 
 namespace IdentityService.Controllers
 {

@@ -1,7 +1,7 @@
-﻿using MessageServiceDTOs;
-using MessageService.Models;
-using Shared.Responses;
+﻿using MessageService.Models;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Shared.DTOs.Message;
+using Shared.DTOs.Responses;
 
 namespace MessageService.Services.Interfaces
 {

@@ -1,4 +1,4 @@
-﻿using Shared.ChatServiceDTOs.Chats;
+﻿using Shared.DTOs.Chat;
 
 namespace ChatService.Models
 {

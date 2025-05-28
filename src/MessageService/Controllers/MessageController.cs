@@ -1,11 +1,10 @@
-﻿using MessageServiceDTOs;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MessageService.Services.Interfaces;
-using Shared.MessageServiceDTOs;
 using System.Security.Claims;
 using MessageService.Attributes;
 using Shared.Authorization.Permissions;
+using Shared.DTOs.Message;
 
 namespace MessageService.Controllers
 {

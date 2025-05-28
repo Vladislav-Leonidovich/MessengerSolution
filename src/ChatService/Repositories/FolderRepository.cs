@@ -1,8 +1,8 @@
 ﻿using ChatService.Data;
 using ChatService.Models;
 using ChatService.Repositories.Interfaces;
-using ChatServiceDTOs.Folders;
 using Microsoft.EntityFrameworkCore;
+using Shared.DTOs.Folder;
 using Shared.Exceptions;
 
 namespace ChatService.Repositories

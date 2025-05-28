@@ -1,8 +1,8 @@
 ﻿@page "/chat/{ChatRoomId:int}"
-@using MauiClient.Services
-@using ChatServiceDTOs.Chats
-@using MessageServiceDTOs
-@using System.Security.Claims
+@    using MauiClient.Services
+@    using ChatServiceDTOs.Chats
+@    using MessageServiceDTOs
+@    using System.Security.Claims
 @inject IChatService ChatService
 @inject IMessageService MessageService
 @inject AuthenticationStateProvider AuthenticationStateProvider

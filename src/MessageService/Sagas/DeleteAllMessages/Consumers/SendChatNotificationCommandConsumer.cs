@@ -1,10 +1,10 @@
 ﻿using MassTransit;
 using MessageService.Data;
 using MessageService.Hubs;
+using MessageService.Sagas.DeleteAllMessages.Events;
 using MessageService.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Shared.Consumers;
-using Shared.Sagas;
 
 namespace MessageService.Sagas.DeleteAllMessages.Consumers
 {

@@ -1,6 +1,6 @@
-﻿using ChatServiceDTOs.Chats;
-using ChatService.Models;
-using Shared.Responses;
+﻿using ChatService.Models;
+using Shared.DTOs.Chat;
+using Shared.DTOs.Responses;
 
 namespace ChatService.Services.Interfaces
 {

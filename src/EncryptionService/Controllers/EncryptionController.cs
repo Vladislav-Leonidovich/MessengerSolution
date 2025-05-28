@@ -1,7 +1,7 @@
-﻿using EncryptionServiceDTOs;
-using EncryptionService.Services;
+﻿using EncryptionService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Shared.DTOs.Encryption;
 
 namespace EncryptionService.Controllers
 {

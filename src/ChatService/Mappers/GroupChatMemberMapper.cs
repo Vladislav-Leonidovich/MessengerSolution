@@ -1,5 +1,5 @@
 ﻿using ChatService.Models;
-using ChatServiceDTOs.Chats;
+using Shared.DTOs.Chat;
 
 namespace ChatService.Mappers
 {
@@ -11,7 +11,7 @@ namespace ChatService.Mappers
         {
             _logger = logger;
         }
-        public override GroupChatMemberDto MapToDto(GroupChatMember entity)
+        public override GroupChatMemberDto MapToDto(GroupChatMember entity, int? userId = null)
         {
             try
             {

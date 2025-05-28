@@ -1,5 +1,4 @@
-﻿using ChatServiceDTOs.Folders;
-using ChatService.Models;
+﻿using ChatService.Models;
 using ChatService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
@@ -7,8 +6,9 @@ using System.Security.Claims;
 using ChatService.Authorization;
 using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
-using Shared.Responses;
 using ChatService.Services.Interfaces;
+using Shared.DTOs.Folder;
+using Shared.DTOs.Responses;
 
 namespace ChatService.Services
 {

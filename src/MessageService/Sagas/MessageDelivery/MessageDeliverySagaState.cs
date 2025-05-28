@@ -1,5 +1,4 @@
 ﻿using MassTransit;
-using MessageServiceDTOs;
 
 namespace MessageService.Sagas.MessageDelivery
 {

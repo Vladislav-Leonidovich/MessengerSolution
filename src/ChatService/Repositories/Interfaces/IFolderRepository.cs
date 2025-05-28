@@ -1,4 +1,4 @@
-﻿using ChatServiceDTOs.Folders;
+﻿using Shared.DTOs.Folder;
 
 namespace ChatService.Repositories.Interfaces
 {

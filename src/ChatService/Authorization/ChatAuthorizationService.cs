@@ -1,8 +1,8 @@
 ﻿using ChatService.Data;
 using ChatService.Repositories;
 using ChatService.Repositories.Interfaces;
-using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
+using Shared.DTOs.Chat;
 using Shared.Exceptions;
 
 namespace ChatService.Authorization
@@ -98,8 +98,8 @@ namespace ChatService.Authorization
             // Перевіряємо, чи є користувач адміном
             var userRole = await _chatRoomRepository.GetUserRoleInGroupChatAsync(userId, chatRoomId);
 
-            return userRole == ChatServiceModels.Chats.GroupRole.Owner ||
-           userRole == ChatServiceModels.Chats.GroupRole.Admin;
+            return userRole == GroupRole.Owner ||
+           userRole == GroupRole.Admin;
         }
     }
 }

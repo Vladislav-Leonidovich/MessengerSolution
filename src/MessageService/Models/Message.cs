@@ -1,4 +1,4 @@
-﻿using MessageServiceDTOs;
+﻿using Shared.DTOs.Common;
 
 namespace MessageService.Models
 {
@@ -31,5 +31,6 @@ namespace MessageService.Models
 
         // Дата редагування повідомлення (якщо воно було змінене)
         public DateTime? EditedAt { get; set; }
+        public MessageStatus Status { get; set; } = MessageStatus.Created;
     }
 }

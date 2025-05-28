@@ -1,10 +1,9 @@
 ﻿using ChatService.Data;
 using ChatService.Repositories.Interfaces;
-using ChatServiceModels.Chats;
-using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using Shared.Authorization;
 using Shared.Authorization.Permissions;
+using Shared.DTOs.Chat;
 using Shared.Exceptions;
 
 namespace ChatService.Authorization

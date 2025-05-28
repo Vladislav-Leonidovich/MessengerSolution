@@ -2,7 +2,7 @@
 using MessageService.Data;
 using MessageService.Services.Interfaces;
 using Shared.Consumers;
-using Shared.Sagas;
+using MessageService.Sagas.MessageDelivery.Events;
 
 namespace MessageService.Sagas.MessageDelivery.Consumers
 {

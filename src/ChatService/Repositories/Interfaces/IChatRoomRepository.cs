@@ -1,6 +1,5 @@
-﻿using ChatServiceDTOs.Chats;
-using ChatServiceModels.Chats;
-using MessageServiceDTOs;
+﻿using Shared.DTOs.Chat;
+using Shared.DTOs.Message;
 
 namespace ChatService.Repositories.Interfaces
 {
@@ -28,5 +27,6 @@ namespace ChatService.Repositories.Interfaces
         Task<GroupRole> GetUserRoleInGroupChatAsync(int userId, int chatRoomId);
         Task<List<int>> GetChatParticipantsFromPrivateChatAsync(int chatRoomId);
         Task<List<int>> GetChatParticipantsFromGroupChatAsync(int chatRoomId);
+        Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId);
     }
 }

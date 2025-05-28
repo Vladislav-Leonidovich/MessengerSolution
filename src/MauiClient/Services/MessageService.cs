@@ -4,9 +4,9 @@ using System.Linq;
 using System.Net.Http.Json;
 using System.Text;
 using System.Threading.Tasks;
-using MessageServiceDTOs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Shared.Contracts;
+using Shared.DTOs.Message;
 
 namespace MauiClient.Services
 {

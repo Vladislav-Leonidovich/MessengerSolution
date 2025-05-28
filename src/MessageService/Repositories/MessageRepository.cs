@@ -4,12 +4,11 @@ using MessageService.Data;
 using MessageService.Models;
 using MessageService.Repositories.Interfaces;
 using MessageService.Services.Interfaces;
-using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using Shared.Contracts;
+using Shared.DTOs.Common;
+using Shared.DTOs.Message;
 using Shared.Exceptions;
-using Shared.Responses;
-using Shared.Sagas;
 
 namespace MessageService.Repositories
 {
@@ -59,8 +58,7 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt,
-                    CorrelationId = message.CorrelationId
+                    EditedAt = message.EditedAt
                 };
                 return messageDto;
             }
@@ -125,8 +123,7 @@ namespace MessageService.Repositories
                         IsRead = messages[i].IsRead,
                         ReadAt = messages[i].ReadAt,
                         IsEdited = messages[i].IsEdited,
-                        EditedAt = messages[i].EditedAt,
-                        CorrelationId = messages[i].CorrelationId,
+                        EditedAt = messages[i].EditedAt
                     });
                 }
 
@@ -174,8 +171,7 @@ namespace MessageService.Repositories
                         IsRead = existingMessage.IsRead,
                         ReadAt = existingMessage.ReadAt,
                         IsEdited = existingMessage.IsEdited,
-                        EditedAt = existingMessage.EditedAt,
-                        CorrelationId = existingMessage.CorrelationId
+                        EditedAt = existingMessage.EditedAt
                     };
                 }
 
@@ -234,8 +230,7 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt,
-                    CorrelationId = message.CorrelationId
+                    EditedAt = message.EditedAt
                 };
             }
             catch (DbUpdateException ex)
@@ -279,8 +274,7 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt,
-                    CorrelationId = message.CorrelationId
+                    EditedAt = message.EditedAt
                 };
                 return messageDto;
             }
@@ -356,8 +350,7 @@ namespace MessageService.Repositories
                     IsRead = lastMessage.IsRead,
                     ReadAt = lastMessage.ReadAt,
                     IsEdited = lastMessage.IsEdited,
-                    EditedAt = lastMessage.EditedAt,
-                    CorrelationId = lastMessage.CorrelationId,
+                    EditedAt = lastMessage.EditedAt
                 };
             }
             catch (DbUpdateException ex)
@@ -520,8 +513,7 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt,
-                    CorrelationId = message.CorrelationId
+                    EditedAt = message.EditedAt
                 };
 
                 // Зберігаємо запис для забезпечення ідемпотентності
@@ -571,8 +563,7 @@ namespace MessageService.Repositories
                     IsRead = message.IsRead,
                     ReadAt = message.ReadAt,
                     IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt,
-                    CorrelationId = message.CorrelationId
+                    EditedAt = message.EditedAt
                 };
             }
             catch (Exception ex)
@@ -599,6 +590,85 @@ namespace MessageService.Repositories
             {
                 _logger.LogError(ex, "Error checking sender user ID for message {MessageId}", messageId);
                 throw new DatabaseException("Error accessing the database", ex);
+            }
+        }
+
+        public async Task<Guid?> GetCorrelationIdByMessageIdAsync(int messageId)
+        {
+            try
+            {
+                var message = await _context.Messages
+                    .Where(m => m.Id == messageId)
+                    .Select(m => new { m.CorrelationId })
+                    .FirstOrDefaultAsync();
+
+                return message?.CorrelationId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні CorrelationId для повідомлення {MessageId}", messageId);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
+        public async Task UpdateMessageStatusAsync(int messageId, MessageStatus status)
+        {
+            try
+            {
+                var message = await _context.Messages.FindAsync(messageId);
+                if (message == null)
+                {
+                    _logger.LogWarning("Повідомлення з ID {MessageId} не знайдено при оновленні статусу", messageId);
+                    return;
+                }
+
+                // Перевіряємо, чи є сенс оновлювати статус (тільки "вищий" статус)
+                if ((int)status > (int)message.Status)
+                {
+                    message.Status = status;
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Статус повідомлення {MessageId} оновлено до {Status}", messageId, status);
+                }
+                else
+                {
+                    _logger.LogDebug("Пропущено оновлення статусу для повідомлення {MessageId}: поточний {CurrentStatus}, запропонований {ProposedStatus}",
+                        messageId, message.Status, status);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при оновленні статусу повідомлення {MessageId} до {Status}", messageId, status);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
+        public async Task UpdateMessageStatusByCorrelationIdAsync(Guid correlationId, MessageStatus status)
+        {
+            try
+            {
+                var message = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.CorrelationId == correlationId);
+
+                if (message == null)
+                {
+                    _logger.LogWarning("Повідомлення з CorrelationId {CorrelationId} не знайдено при оновленні статусу", correlationId);
+                    return;
+                }
+
+                // Перевіряємо, чи є сенс оновлювати статус (тільки "вищий" статус)
+                if ((int)status > (int)message.Status)
+                {
+                    message.Status = status;
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Статус повідомлення {MessageId} з CorrelationId {CorrelationId} оновлено до {Status}",
+                        message.Id, correlationId, status);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при оновленні статусу повідомлення з CorrelationId {CorrelationId} до {Status}",
+                    correlationId, status);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
             }
         }
     }

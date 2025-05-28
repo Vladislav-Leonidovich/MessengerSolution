@@ -1,5 +1,5 @@
 ﻿using ChatService.Models;
-using ChatServiceDTOs.Folders;
+using Shared.DTOs.Folder;
 
 namespace ChatService.Mappers
 {
@@ -11,7 +11,7 @@ namespace ChatService.Mappers
         {
             _logger = logger;
         }
-        public override FolderDto MapToDto(Folder entity)
+        public override FolderDto MapToDto(Folder entity, int? userId = null)
         {
             try
             {

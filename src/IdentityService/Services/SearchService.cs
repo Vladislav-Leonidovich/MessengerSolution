@@ -1,6 +1,6 @@
 ﻿using IdentityService.Data;
 using Microsoft.EntityFrameworkCore;
-using Shared.IdentityServiceDTOs;
+using Shared.DTOs.Identity;
 
 namespace IdentityService.Services
 {

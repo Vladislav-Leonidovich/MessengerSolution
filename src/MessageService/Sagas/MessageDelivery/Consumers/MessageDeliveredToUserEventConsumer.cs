@@ -1,7 +1,7 @@
 ﻿using MassTransit;
 using MessageService.Data;
 using Shared.Consumers;
-using Shared.Sagas;
+using MessageService.Sagas.MessageDelivery.Events;
 
 namespace MessageService.Sagas.MessageDelivery.Consumers
 {

@@ -2,10 +2,10 @@
 using Shared.Protos;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
-using MessageServiceDTOs;
 using Microsoft.EntityFrameworkCore;
 using ChatService.Repositories;
 using ChatService.Repositories.Interfaces;
+using Shared.DTOs.Chat;
 
 namespace ChatService.Services
 {

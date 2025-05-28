@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using MessageServiceDTOs;
+using Shared.DTOs.Chat;
 
 namespace Shared.Contracts
 {

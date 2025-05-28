@@ -4,7 +4,7 @@ using ChatService.Models;
 using ChatService.Services.Interfaces;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Shared.ChatServiceDTOs.Chats;
+using Shared.DTOs.Chat;
 using Shared.Exceptions;
 using Shared.Sagas;
 

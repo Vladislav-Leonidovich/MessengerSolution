@@ -1,4 +1,4 @@
-﻿using Shared.IdentityServiceDTOs;
+﻿using Shared.DTOs.Identity;
 
 namespace IdentityService.Services
 {

@@ -1,9 +1,9 @@
 ﻿using MassTransit;
 using MessageService.Data;
 using MessageService.Repositories.Interfaces;
-using MessageServiceDTOs;
+using Shared.DTOs.Message;
 using Shared.Consumers;
-using Shared.Sagas;
+using MessageService.Sagas.MessageDelivery.Events;
 
 namespace MessageService.Sagas.MessageDelivery.Consumers
 {

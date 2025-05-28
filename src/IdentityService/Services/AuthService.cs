@@ -1,5 +1,4 @@
 ﻿using IdentityService.Data;
-using IdentityService.DTOs;
 using IdentityService.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,6 +7,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Shared.IdentityServiceDTOs;
+using Shared.DTOs.Identity;
 
 namespace IdentityService.Services
 {

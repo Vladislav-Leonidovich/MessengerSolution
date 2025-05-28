@@ -1,24 +1,30 @@
 ﻿using ChatService.Models;
-using ChatServiceDTOs.Chats;
-using MessageServiceDTOs;
-using Shared.IdentityServiceDTOs;
+using ChatService.Repositories;
+using ChatService.Repositories.Interfaces;
+using ChatService.Services.Interfaces;
+using Shared.DTOs.Chat;
+using Shared.DTOs.Identity;
+using Shared.DTOs.Message;
 
 namespace ChatService.Mappers
 {
     public class PrivateChatRoomMapper : BaseEntityMapper<PrivateChatRoom, ChatRoomDto>
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IChatRoomRepository _chatRoomRepository;
         private readonly ILogger<PrivateChatRoomMapper> _logger;
 
         public PrivateChatRoomMapper(
             IHttpClientFactory httpClientFactory,
+            IChatRoomRepository chatRepository,
             ILogger<PrivateChatRoomMapper> logger)
         {
             _httpClientFactory = httpClientFactory;
+            _chatRoomRepository = chatRepository;
             _logger = logger;
         }
 
-        public override ChatRoomDto MapToDto(PrivateChatRoom entity)
+        public override ChatRoomDto MapToDto(PrivateChatRoom entity, int? userId)
         {
             try
             {
@@ -26,15 +32,16 @@ namespace ChatService.Mappers
                 {
                     _logger.LogError("PrivateChatRoom entity is null in MapToDto method.");
                     throw new ArgumentNullException(nameof(entity));
+
                 }
                 return new ChatRoomDto
                 {
                     Id = entity.Id,
                     CreatedAt = entity.CreatedAt,
-                    Name = GetChatNameAsync(entity).GetAwaiter().GetResult(),
+                    Name = GetChatNameAsync(entity, userId).GetAwaiter().GetResult(),
                     ChatRoomType = entity.ChatRoomType,
                     ParticipantIds = entity.UserChatRooms?.Select(ucr => ucr.UserId) ?? new List<int>(),
-                    LastMessagePreview = GetLastMessagePreviewAsync(entity.Id).GetAwaiter().GetResult()
+                    LastMessagePreview = _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id).GetAwaiter().GetResult()
                 };
             } 
             catch (Exception ex)
@@ -45,7 +52,7 @@ namespace ChatService.Mappers
         }
 
         // Асинхронна версія для кращої продуктивності
-        public async Task<ChatRoomDto> MapToDtoAsync(PrivateChatRoom entity, int? currentUserId = null)
+        public new async Task<ChatRoomDto> MapToDtoAsync(PrivateChatRoom entity, int? userId)
         {
             try
             {
@@ -58,10 +65,10 @@ namespace ChatService.Mappers
                 {
                     Id = entity.Id,
                     CreatedAt = entity.CreatedAt,
-                    Name = await GetChatNameAsync(entity, currentUserId),
+                    Name = await GetChatNameAsync(entity, userId),
                     ChatRoomType = entity.ChatRoomType,
                     ParticipantIds = entity.UserChatRooms?.Select(ucr => ucr.UserId) ?? new List<int>(),
-                    LastMessagePreview = await GetLastMessagePreviewAsync(entity.Id)
+                    LastMessagePreview = await _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id)
                 };
             }
             catch (Exception ex)
@@ -106,7 +113,7 @@ namespace ChatService.Mappers
                 throw;
             }
         }
-        public IEnumerable<ChatRoomDto> MapToDtoCollection(IEnumerable<PrivateChatRoom>? entities)
+        public new IEnumerable<ChatRoomDto> MapToDtoCollection(IEnumerable<PrivateChatRoom>? entities, int? userId)
         {
             try
             {
@@ -116,13 +123,37 @@ namespace ChatService.Mappers
                     return Enumerable.Empty<ChatRoomDto>();
                 }
 
-                var collection = entities?.Select(e => MapToDto(e)) ?? Enumerable.Empty<ChatRoomDto>();
-                if (!collection.Any() || collection == null)
+                var collection = entities?.Select(e => MapToDto(e, userId)) ?? Enumerable.Empty<ChatRoomDto>();
+                if (!collection.Any())
                 {
-                    _logger.LogError("MapToDtoCollection is null.");
-                    throw new InvalidOperationException("MapToDtoCollection returned null or empty collection.");
+                    _logger.LogError("MapToDtoCollection is empty.");
                 }
                 return collection;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при мапінгу колекції PrivateChatRoom до ChatRoomDto");
+                throw;
+            }
+        }
+        public new async Task<IEnumerable<ChatRoomDto>> MapToDtoCollectionAsync(IEnumerable<PrivateChatRoom>? entities, int? userId)
+        {
+            try
+            {
+                if (entities == null)
+                {
+                    _logger.LogWarning("MapToDtoCollection received null entities collection.");
+                    return Enumerable.Empty<ChatRoomDto>();
+                }
+
+                var tasks = entities.Select(e => MapToDtoAsync(e, userId));
+                var results = await Task.WhenAll(tasks);
+
+                if (!results.Any())
+                {
+                    _logger.LogError("MapToDtoCollection is empty.");
+                }
+                return results;
             }
             catch (Exception ex)
             {
@@ -154,7 +185,7 @@ namespace ChatService.Mappers
         }
 
         // Допоміжні методи
-        private async Task<string> GetChatNameAsync(PrivateChatRoom chat, int? currentUserId = null)
+        private async Task<string> GetChatNameAsync(PrivateChatRoom chat, int? currentUserId)
         {
             try
             {
@@ -182,27 +213,6 @@ namespace ChatService.Mappers
             {
                 _logger.LogError(ex, "Помилка при отриманні імені користувача");
                 return "Приватний чат";
-            }
-        }
-
-        private async Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId)
-        {
-            try
-            {
-                var messageClient = _httpClientFactory.CreateClient("MessageClient");
-                var response = await messageClient.GetAsync($"api/message/get-last-message/{chatRoomId}");
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadFromJsonAsync<MessageDto>() ?? new MessageDto();
-                }
-
-                return new MessageDto();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні останнього повідомлення для чату {ChatId}", chatRoomId);
-                return new MessageDto();
             }
         }
     }

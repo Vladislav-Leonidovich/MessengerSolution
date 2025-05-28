@@ -1,7 +1,8 @@
 ﻿using MassTransit;
+using MessageService.Sagas.DeleteAllMessages.Events;
 using MessageService.Sagas.MessageDelivery;
 using Shared.Contracts;
-using Shared.Sagas;
+using MessageService.Sagas.DeleteAllMessages.Events;
 
 namespace MessageService.Sagas.DeleteAllMessages
 {

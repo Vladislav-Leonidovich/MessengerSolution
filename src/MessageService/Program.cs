@@ -102,6 +102,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<PublishMessageCommandConsumer>();
     x.AddConsumer<CheckDeliveryStatusCommandConsumer>();
     x.AddConsumer<MessageDeliveredToUserEventConsumer>();
+    x.AddConsumer<MessageStatusUpdateConsumer>();
 
     // Реєстрація консьюмерів для Outbox
 

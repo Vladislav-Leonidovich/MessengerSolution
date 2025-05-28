@@ -1,14 +1,18 @@
 ﻿using MassTransit;
 using MessageService.Data;
-using MessageServiceDTOs;
 using Shared.Contracts;
 using MessageService.Repositories.Interfaces;
 using Shared.Exceptions;
 using MessageService.Authorization;
-using Shared.Responses;
 using MessageService.Services.Interfaces;
 using System.Security.Claims;
 using Shared.Sagas;
+using Shared.DTOs.Message;
+using Shared.DTOs.Responses;
+using MessageService.Models;
+using MessageService.Sagas.MessageDelivery.Events;
+using MessageService.Sagas.DeleteAllMessages.Events;
+
 
 namespace MessageService.Services
 {
@@ -375,15 +379,15 @@ namespace MessageService.Services
                 {
                     throw new EntityNotFoundException("Message", messageId);
                 }
-
-                if (message.CorrelationId == null)
+                var correlationId = await _messageRepository.GetCorrelationIdByMessageIdAsync(messageId);
+                if (correlationId == null)
                 {
                     return ApiResponse<bool>.Fail("Повідомлення не належить жодній сазі доставки");
                 }
 
                 await _eventPublisher.PublishAsync(new MessageDeliveredToUserEvent
                 {
-                    CorrelationId = message.CorrelationId.Value,
+                    CorrelationId = correlationId.Value,
                     MessageId = messageId,
                     UserId = userId
                 });

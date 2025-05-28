@@ -1,5 +1,5 @@
 ﻿using ChatService.Models;
-using Shared.ChatServiceDTOs.Chats;
+using Shared.DTOs.Chat;
 
 namespace ChatService.Services.Interfaces
 {

@@ -1,6 +1,6 @@
-﻿using ChatServiceDTOs.Folders;
-using ChatService.Models;
-using Shared.Responses;
+﻿using ChatService.Models;
+using Shared.DTOs.Folder;
+using Shared.DTOs.Responses;
 namespace ChatService.Services.Interfaces
 {
     public interface IFolderService

@@ -2,13 +2,13 @@
 using MessageService.Data;
 using MessageService.Hubs;
 using MessageService.Services.Interfaces;
-using MessageServiceDTOs;
+using Shared.DTOs.Message;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Shared.Consumers;
 using Shared.Contracts;
 using Shared.Exceptions;
-using Shared.Sagas;
+using MessageService.Sagas.MessageDelivery.Events;
 
 namespace MessageService.Sagas.MessageDelivery.Consumers
 {
@@ -39,19 +39,19 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
 
             try
             {
-                // Розшифровуємо вміст повідомлення перед надсиланням клієнтам
+                /*// Розшифровуємо вміст повідомлення перед надсиланням клієнтам
                 string content;
                 try
                 {
                     // Вміст повідомлення у command.Content вже зашифрований
-                    content = await _encryptionClient.DecryptAsync(command.Content);
+                    content = await _encryptionClient.EncryptAsync(command.Content);
                 }
                 catch (ServiceUnavailableException)
                 {
                     // Якщо сервіс шифрування недоступний, показуємо заглушку
                     _logger.LogWarning("Сервіс шифрування недоступний. Повідомлення буде надіслано із заглушкою.");
                     content = "Повідомлення недоступне для відображення";
-                }
+                }*/
 
                 // Створюємо DTO для надсилання через SignalR
                 var messageDto = new MessageDto
@@ -59,7 +59,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                     Id = command.MessageId,
                     ChatRoomId = command.ChatRoomId,
                     SenderUserId = command.SenderUserId,
-                    Content = content, // Розшифрований вміст
+                    Content = command.Content, // Розшифрований вміст
                     CreatedAt = DateTime.UtcNow,
                     IsRead = false,
                     IsEdited = false

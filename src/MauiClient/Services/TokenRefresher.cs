@@ -5,7 +5,7 @@ using System.Linq;
 using System.Net.Http.Json;
 using System.Text;
 using System.Threading.Tasks;
-using IdentityService.DTOs;
+using Shared.DTOs.Identity;
 using Shared.IdentityServiceDTOs;
 
 namespace MauiClient.Services

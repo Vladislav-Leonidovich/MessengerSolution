@@ -1,5 +1,5 @@
-﻿using IdentityService.DTOs;
-using IdentityService.Models;
+﻿using IdentityService.Models;
+using Shared.DTOs.Identity;
 
 namespace IdentityService.Services
 {

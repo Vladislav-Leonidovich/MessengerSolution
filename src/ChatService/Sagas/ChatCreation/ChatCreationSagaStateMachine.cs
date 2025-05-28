@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using ChatService.Services.Interfaces;
 using MassTransit;
-using Shared.ChatServiceDTOs.Chats;
+using Shared.DTOs.Chat;
 using Shared.Sagas;
 
 namespace ChatService.Sagas.ChatCreation

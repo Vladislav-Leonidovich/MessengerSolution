@@ -1,7 +1,8 @@
 ﻿using MassTransit.SagaStateMachine;
 using MessageService.Models;
-using MessageServiceDTOs;
 using Shared.Contracts;
+using Shared.DTOs.Common;
+using Shared.DTOs.Message;
 
 namespace MessageService.Repositories.Interfaces
 {
@@ -18,5 +19,8 @@ namespace MessageService.Repositories.Interfaces
         Task<MessageDto> GetMessageByIdAsync(int messageId);
         Task<MessageDto?> FindMessageByCorrelationIdAsync(Guid correlationId);
         Task<int> GetUserIdSenderMessageAsync(int messageId);
+        Task<Guid?> GetCorrelationIdByMessageIdAsync(int messageId);
+        Task UpdateMessageStatusAsync(int messageId, MessageStatus status);
+        Task UpdateMessageStatusByCorrelationIdAsync(Guid correlationId, MessageStatus status);
     }
 }

@@ -176,6 +176,7 @@ builder.Services.AddScoped<CompensateChatCreationCommandConsumer>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();
 builder.Services.AddChatOperationServices();
+builder.Services.AddGrpcClients(builder.Configuration);
 builder.Services.AddGrpc();
 
 builder.Services.AddControllers();
