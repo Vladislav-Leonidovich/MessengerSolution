@@ -17,14 +17,14 @@ namespace ChatService.Repositories
         private readonly ChatDbContext _context;
         private readonly ILogger<ChatRoomRepository> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IMessageInfoGrpcService _messageInfoService;
+        private readonly IMessageGrpcService _messageInfoService;
         private readonly IMapperFactory _mapperFactory;
 
         public ChatRoomRepository(
             ChatDbContext context,
             ILogger<ChatRoomRepository> logger,
             IHttpClientFactory httpClientFactory,
-            IMessageInfoGrpcService messageInfoService,
+            IMessageGrpcService messageInfoService,
             IMapperFactory mapperFactory)
         {
             _context = context;

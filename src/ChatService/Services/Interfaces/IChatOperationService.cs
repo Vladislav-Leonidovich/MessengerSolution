@@ -22,8 +22,10 @@ namespace ChatService.Services.Interfaces
         Task<IEnumerable<ChatOperation>> GetActiveOperationsForChatAsync(int chatRoomId);
         Task<int> GetOperationCountForUserAsync(int userId);
         Task<IEnumerable<ChatOperation>> GetOperationsForChatAsync(int chatRoomId);
+        int ExtractChatRoomIdFromResult(string? operationResult);
         Task<bool> IsOperationActiveAsync(Guid correlationId);
         Task<bool> CanCancelOperationAsync(Guid correlationId);
         Task<bool> IsOperationInProgressAsync(int chatRoomId, ChatOperationType operationType);
+        Task<ChatOperation> WaitForOperationCompletionAsync(Guid correlationId, int timeoutSeconds = 30);
     }
 }

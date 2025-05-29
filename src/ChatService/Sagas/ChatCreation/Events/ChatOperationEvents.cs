@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Shared.DTOs.Chat;
 
-namespace Shared.Sagas
+namespace SChatService.Sagas.ChatCreation.Events
 {
     // Базовий клас для всіх подій операцій
     public abstract class ChatOperationEventBase

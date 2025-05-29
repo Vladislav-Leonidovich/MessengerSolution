@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Shared.IdentityServiceDTOs;
 using Shared.DTOs.Identity;
+using IdentityService.Services.Interfaces;
 
 namespace IdentityService.Services
 {

@@ -15,6 +15,9 @@ using ChatService.Services.Interfaces;
 using ChatService.Mappers.Interfaces;
 using Shared.DTOs.Chat;
 using Shared.DTOs.Responses;
+using ChatService.Sagas.ChatCreation.Events;
+using System.Diagnostics.Tracing;
+using System.Text.Json;
 
 namespace ChatService.Services
 {
@@ -22,17 +25,20 @@ namespace ChatService.Services
     {
         private readonly IChatRoomRepository _chatRoomRepository;
         private readonly IChatAuthorizationService _authService;
+        private readonly IChatOperationService _chatOperationService;
         private readonly IBus _bus;
         private readonly ILogger<ChatService> _logger;
 
         public ChatService(
             IChatRoomRepository chatRoomRepository,
             IChatAuthorizationService authService,
+            IChatOperationService chatOperationService,
             IBus bus,
             ILogger<ChatService> logger)
         {
             _chatRoomRepository = chatRoomRepository;
             _authService = authService;
+            _chatOperationService = chatOperationService;
             _bus = bus;
             _logger = logger;
         }
@@ -134,8 +140,38 @@ namespace ChatService.Services
         {
             try
             {
-                var chat = await _chatRoomRepository.CreatePrivateChatAsync(dto, userId);
-                return ApiResponse<ChatRoomDto>.Ok(chat, "Приватний чат успішно створено");
+                var correlationId = Guid.NewGuid();
+
+                _logger.LogInformation("Створення приватного чату для користувача {UserId} з кореляційним ID {CorrelationId}", userId, correlationId);
+
+                await _bus.Publish(new ChatCreationStartedEvent
+                {
+                    CorrelationId = correlationId,
+                    ChatRoomId = 0, // Буде згенеровано в сазі
+                    CreatorUserId = userId,
+
+                });
+
+                var operation = await _chatOperationService.WaitForOperationCompletionAsync(correlationId);
+
+                if (operation.IsSuccessful)
+                {
+                    // Отримуємо створений чат за ID з результату операції
+                    int chatRoomId = _chatOperationService.ExtractChatRoomIdFromResult(operation.Result);
+                    var chat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
+
+                    if (chat == null)
+                    {
+                        return ApiResponse<ChatRoomDto>.Fail("Чат створено, але не вдалося отримати його дані");
+                    }
+
+                    return ApiResponse<ChatRoomDto>.Ok(chat, "Груповий чат успішно створено");
+                }
+                else
+                {
+                    // Якщо операція не вдалася, повертаємо помилку
+                    return ApiResponse<ChatRoomDto>.Fail(operation.ErrorMessage ?? "Помилка при створенні чату");
+                }
             }
             catch (Exception ex)
             {
@@ -336,8 +372,40 @@ namespace ChatService.Services
         {
             try
             {
-                var chat = await _chatRoomRepository.CreateGroupChatAsync(dto, userId);
-                return ApiResponse<GroupChatRoomDto>.Ok(chat, "Груповий чат успішно створено");
+                var correlationId = Guid.NewGuid();
+
+                _logger.LogInformation("Створення групового чату {ChatName} для користувача {UserId} з кореляційним ID {CorrelationId}",
+                    dto.Name, userId, correlationId);
+
+                await _bus.Publish(new ChatCreationStartedEvent
+                {
+                    CorrelationId = correlationId,
+                    ChatRoomId = 0, // Буде згенеровано в сазі
+                    CreatorUserId = userId,
+                    MemberIds = dto.MemberIds,
+                    ChatName = dto.Name
+                });
+
+                var operation = await _chatOperationService.WaitForOperationCompletionAsync(correlationId);
+
+                if (operation.IsSuccessful)
+                {
+                    // Отримуємо створений чат за ID з результату операції
+                    int chatRoomId = _chatOperationService.ExtractChatRoomIdFromResult(operation.Result);
+                    var chat = await _chatRoomRepository.GetGroupChatByIdAsync(chatRoomId);
+
+                    if (chat == null)
+                    {
+                        return ApiResponse<GroupChatRoomDto>.Fail("Чат створено, але не вдалося отримати його дані");
+                    }
+
+                    return ApiResponse<GroupChatRoomDto>.Ok(chat, "Груповий чат успішно створено");
+                }
+                else
+                {
+                    // Якщо операція не вдалася, повертаємо помилку
+                    return ApiResponse<GroupChatRoomDto>.Fail(operation.ErrorMessage ?? "Помилка при створенні чату");
+                }
             }
             catch (Exception ex)
             {

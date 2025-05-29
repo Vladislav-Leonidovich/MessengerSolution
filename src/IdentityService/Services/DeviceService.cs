@@ -1,4 +1,6 @@
 ﻿
+using IdentityService.Services.Interfaces;
+
 namespace IdentityService.Services
 {
     public class DeviceService : IDeviceService

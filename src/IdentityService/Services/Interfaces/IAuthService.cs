@@ -1,7 +1,7 @@
 ﻿using IdentityService.Models;
 using Shared.DTOs.Identity;
 
-namespace IdentityService.Services
+namespace IdentityService.Services.Interfaces
 {
     public interface IAuthService
     {

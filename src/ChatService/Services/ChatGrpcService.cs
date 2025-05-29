@@ -10,18 +10,18 @@ using Shared.DTOs.Chat;
 namespace ChatService.Services
 {
     [Authorize]
-    public class ChatAuthorizationGrpcService : Shared.Protos.ChatAuthorizationService.ChatAuthorizationServiceBase
+    public class ChatGrpcService : Shared.Protos.ChatGrpcService.ChatGrpcServiceBase
     {
-        private readonly IChatAuthorizationService _authService;
+        private readonly IChatGrpcService _service;
         private readonly IChatRoomRepository _chatRoomRepository;
-        private readonly ILogger<ChatAuthorizationGrpcService> _logger;
+        private readonly ILogger<ChatGrpcService> _logger;
 
-        public ChatAuthorizationGrpcService(
-            IChatAuthorizationService authService,
+        public ChatGrpcService(
+            IChatGrpcService service,
             IChatRoomRepository chatRoomRepository,
-            ILogger<ChatAuthorizationGrpcService> logger)
+            ILogger<ChatGrpcService> logger)
         {
-            _authService = authService;
+            _service = service;
             _chatRoomRepository = chatRoomRepository;
             _logger = logger;
         }

@@ -324,6 +324,37 @@ namespace ChatService.Services
                 .ToListAsync();
         }
 
+        // Метод для вилучення ID чату з результату операції
+        public int ExtractChatRoomIdFromResult(string? operationResult)
+        {
+            if (string.IsNullOrEmpty(operationResult))
+            {
+                throw new InvalidOperationException("Результат операції порожній");
+            }
+
+            try
+            {
+                // Розпаковуємо JSON з результату операції
+                var resultObj = JsonSerializer.Deserialize<Dictionary<string, object>>(operationResult);
+
+                if (resultObj != null && resultObj.TryGetValue("ChatRoomId", out var chatRoomIdObj))
+                {
+                    // Конвертуємо значення в int
+                    if (chatRoomIdObj is JsonElement element && element.ValueKind == JsonValueKind.Number)
+                    {
+                        return element.GetInt32();
+                    }
+                }
+
+                throw new InvalidOperationException("Не вдалося отримати ID чату з результату операції");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при розборі результату операції: {OperationResult}", operationResult);
+                throw new InvalidOperationException("Помилка при розборі результату операції", ex);
+            }
+        }
+
         // === Методи для перевірки стану ===
 
         public async Task<bool> IsOperationActiveAsync(Guid correlationId)
@@ -344,6 +375,38 @@ namespace ChatService.Services
                 .AnyAsync(op => op.ChatRoomId == chatRoomId &&
                                op.OperationType == operationType &&
                                op.IsActive);
+        }
+
+        public async Task<ChatOperation> WaitForOperationCompletionAsync(Guid correlationId, int timeoutSeconds = 30)
+        {
+            var startTime = DateTime.UtcNow;
+            var timeoutTime = startTime.AddSeconds(timeoutSeconds);
+
+            // Отримуємо інформацію про операцію
+            var operation = await GetOperationAsync(correlationId);
+            if (operation == null)
+            {
+                _logger.LogWarning("Операція з CorrelationId {CorrelationId} не знайдена", correlationId);
+                throw new EntityNotFoundException("ChatOperation", correlationId);
+            }
+
+            while (operation.IsActive && DateTime.UtcNow < timeoutTime)
+            {
+                // Якщо операція завершена (успішно чи з помилкою), повертаємо результат
+                if (operation.IsCompleted)
+                {
+                    _logger.LogInformation("Операція {CorrelationId} завершена зі статусом {Status}",
+                        correlationId, operation.Status);
+                    return operation;
+                }
+
+                // Чекаємо перед наступною перевіркою
+                await Task.Delay(100);
+            }
+
+            // Якщо операція не завершилася за відведений час
+            _logger.LogWarning("Час очікування операції {CorrelationId} минув", correlationId);
+            throw new TimeoutException($"Час очікування операції {correlationId} минув");
         }
 
         // === Приватні допоміжні методи ===

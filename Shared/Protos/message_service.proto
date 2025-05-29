@@ -2,11 +2,11 @@ syntax = "proto3";
 
 option csharp_namespace = "Shared.Protos";
 
-package message.info;
+package message;
 
 import "google/protobuf/timestamp.proto";
 
-service MessageInfoService {
+service MessageGrpcService {
   rpc GetLastMessage (LastMessageRequest) returns (MessageData);
   rpc GetLastMessagesBatch (LastMessagesBatchRequest) returns (LastMessagesBatchResponse);
 }

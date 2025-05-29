@@ -6,15 +6,15 @@ using Shared.Protos;
 
 namespace ChatService.Repositories
 {
-    public class MessageInfoGrpcService : IMessageInfoGrpcService
+    public class MessageGrpcService : IMessageGrpcService
     {
-        private readonly MessageInfoService.MessageInfoServiceClient _client;
+        private readonly MessageGrpcService.MessageGrpcServiceClient _client;
         private readonly ILogger<MessageInfoGrpcService> _logger;
         private readonly IMapperFactory _mapperFactory;
 
-        public MessageInfoGrpcService(
-            MessageInfoService.MessageInfoServiceClient client,
-            ILogger<MessageInfoGrpcService> logger,
+        public MessageGrpcService(
+            MessageGrpcService.MessageGrpcServiceClient client,
+            ILogger<MessageGrpcService> logger,
             IMapperFactory mapperFactory)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));

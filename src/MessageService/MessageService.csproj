@@ -34,9 +34,9 @@
 		<ProjectReference Include="..\..\Shared\Shared.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<Protobuf Include="..\..\Shared\Protos\chat_authorization.proto" GrpcServices="Client" />
-		<Protobuf Include="..\..\Shared\Protos\encryption.proto" GrpcServices="Client" />
-		<Protobuf Include="..\..\Shared\Protos\message_info.proto" GrpcServices="Server" />
+		<Protobuf Include="..\..\Shared\Protos\chat_service.proto" GrpcServices="Client" />
+		<Protobuf Include="..\..\Shared\Protos\encryption_service.proto" GrpcServices="Client" />
+		<Protobuf Include="..\..\Shared\Protos\message_service.proto" GrpcServices="Server" />
 	</ItemGroup>
 
 </Project>

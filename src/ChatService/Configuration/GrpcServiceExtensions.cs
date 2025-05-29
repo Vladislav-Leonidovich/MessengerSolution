@@ -50,7 +50,7 @@ namespace ChatService.Configuration
             });
 
             // Реєструємо сервіс
-            services.AddScoped<IMessageInfoGrpcService, MessageInfoGrpcService>();
+            services.AddScoped<IMessageGrpcService, MessageInfoGrpcService>();
 
             return services;
         }

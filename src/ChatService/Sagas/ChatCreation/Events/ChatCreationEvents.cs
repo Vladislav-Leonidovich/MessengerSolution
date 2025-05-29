@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Org.BouncyCastle.Bcpg;
 using Shared.DTOs.Chat;
 
-namespace Shared.Sagas
+namespace ChatService.Sagas.ChatCreation.Events
 {
     public class CreateChatRoomCommand
     {
@@ -13,6 +14,8 @@ namespace Shared.Sagas
         public int ChatRoomId { get; set; }
         public int CreatorUserId { get; set; }
         public List<int> MemberIds { get; set; } = new List<int>();
+        public int? MemberUserId { get; set; } = null;
+        public string? ChatName { get; set; } = null;
     }
 
     public class NotifyMessageServiceCommand
@@ -33,7 +36,9 @@ namespace Shared.Sagas
         public Guid CorrelationId { get; set; } = Guid.NewGuid();
         public int ChatRoomId { get; set; }
         public int CreatorUserId { get; set; }
-        public List<int> MemberIds { get; set; } = new List<int>();
+        public List<int>? MemberIds { get; set; } = new List<int>();
+        public int? MemberUserId { get; set; } = null;
+        public string? ChatName { get; set; } = null;
     }
 
     public class ChatRoomCreatedEvent

@@ -1,0 +1,42 @@
+﻿// Shared/Protos/identity_service.proto
+syntax = "proto3";
+
+option csharp_namespace = "Shared.Protos";
+
+package identity;
+
+import "google/protobuf/empty.proto";
+
+service IdentityGrpcService {
+    // Отримати інформацію про користувача
+    rpc GetUserInfoByUserId(GetUserInfoRequest) returns (UserInfoResponse);
+    
+    // Отримати інформацію про декількох користувачів
+    rpc GetUsersInfoByUserIdBatch(GetUsersInfoBatchRequest) returns (GetUsersInfoBatchResponse);
+}
+
+message GetUserInfoRequest {
+    int32 user_id = 1;
+}
+
+message UserInfoResponse {
+    bool success = 1;
+    UserDto user = 2;
+    string error_message = 3;
+}
+
+message UserDto {
+    int32 id = 1;
+    string user_name = 2;
+    string display_name = 3;
+}
+
+message GetUsersInfoBatchRequest {
+    repeated int32 user_ids = 1;
+}
+
+message GetUsersInfoBatchResponse {
+    bool success = 1;
+    map<int32, UserDto> users = 2;
+    string error_message = 3;
+}

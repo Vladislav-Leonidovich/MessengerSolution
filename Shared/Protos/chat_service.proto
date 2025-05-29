@@ -2,9 +2,9 @@ syntax = "proto3";
 
 option csharp_namespace = "Shared.Protos";
 
-package chat.authorization;
+package chat;
 
-service ChatAuthorizationService {
+service ChatGrpcService {
   rpc CheckAccess (CheckAccessRequest) returns (CheckAccessResponse);
   rpc CheckAccessBatch (CheckAccessBatchRequest) returns (CheckAccessBatchResponse);
   rpc GetChatParticipants (GetChatParticipantsRequest) returns (GetChatParticipantsResponse);
