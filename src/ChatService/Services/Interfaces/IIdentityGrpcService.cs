@@ -4,7 +4,7 @@ namespace ChatService.Services.Interfaces
 {
     public interface IIdentityGrpcService
     {
-        Task<UserDto?> GetUserInfoAsync(int userId);
-        Task<Dictionary<int, UserDto>>? GetUsersInfoBatchAsync(IEnumerable<int> userIds);
+        Task<UserDto> GetUserInfoAsync(int userId);
+        Task<Dictionary<int, UserDto>> GetUsersInfoBatchAsync(IEnumerable<int> userIds);
     }
 }

@@ -1,8 +1,8 @@
 ﻿using ChatService.Data;
 using ChatService.Repositories.Interfaces;
+using ChatService.Sagas.ChatCreation.Events;
 using MassTransit;
 using Shared.Consumers;
-using Shared.Sagas;
 
 namespace ChatService.Sagas.ChatCreation.Consumers
 {

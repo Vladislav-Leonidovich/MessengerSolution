@@ -40,17 +40,17 @@ namespace ChatService.Configuration
                 {
                     // Тут можна додати логіку отримання токена аутентифікації
                     // Наприклад, з TokenService або з HttpContext
-                    return ""; // Замініть на реальну логіку
+                    return ""; 
                 };
 
                 var logger = serviceProvider.GetRequiredService<ILogger<AuthGrpcInterceptor>>();
                 var interceptor = new AuthGrpcInterceptor(tokenProvider, logger);
 
-                return new MessageInfoService.MessageInfoServiceClient(channel.Intercept(interceptor));
+                return new MessageGrpcService.MessageGrpcServiceClient(channel.Intercept(interceptor));
             });
 
             // Реєструємо сервіс
-            services.AddScoped<IMessageGrpcService, MessageInfoGrpcService>();
+            services.AddScoped<IMessageGrpcService, ChatService.Services.MessageGrpcService>();
 
             return services;
         }

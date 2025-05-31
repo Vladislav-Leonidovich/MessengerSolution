@@ -2,7 +2,6 @@
 using Polly;
 using Shared.Protos;
 using MessageService.Services.Interfaces;
-using MessageServiceDTOs;
 
 namespace MessageService.Services
 {
@@ -10,7 +9,7 @@ namespace MessageService.Services
     public class ChatGrpcClient : IChatGrpcClient, IDisposable
     {
         private readonly GrpcChannel _channel;
-        private readonly ChatAuthorizationService.ChatAuthorizationServiceClient _client;
+        private readonly ChatGrpcService.ChatGrpcServiceClient _client;
         private readonly ILogger<ChatGrpcClient> _logger;
         private readonly IAsyncPolicy _resiliencePolicy;
 
@@ -33,7 +32,7 @@ namespace MessageService.Services
                 }
             });
 
-            _client = new ChatAuthorizationService.ChatAuthorizationServiceClient(_channel);
+            _client = new ChatGrpcService.ChatGrpcServiceClient(_channel);
 
             // Настройка политики отказоустойчивости
             _resiliencePolicy = CreateResiliencePolicy();

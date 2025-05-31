@@ -1,7 +1,7 @@
 ﻿using ChatService.Data;
+using ChatService.Sagas.ChatCreation.Events;
 using MassTransit;
 using Shared.Consumers;
-using Shared.Sagas;
 
 namespace ChatService.Sagas.ChatCreation.Consumers
 {

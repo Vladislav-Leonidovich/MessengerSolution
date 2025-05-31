@@ -1,4 +1,4 @@
-﻿using MessageServiceDTOs;
+﻿
 
 namespace MessageService.Services.Interfaces
 {

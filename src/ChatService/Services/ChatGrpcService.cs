@@ -12,16 +12,16 @@ namespace ChatService.Services
     [Authorize]
     public class ChatGrpcService : Shared.Protos.ChatGrpcService.ChatGrpcServiceBase
     {
-        private readonly IChatGrpcService _service;
+        private readonly IChatAuthorizationService _authService;
         private readonly IChatRoomRepository _chatRoomRepository;
         private readonly ILogger<ChatGrpcService> _logger;
 
         public ChatGrpcService(
-            IChatGrpcService service,
+            IChatAuthorizationService authService,
             IChatRoomRepository chatRoomRepository,
             ILogger<ChatGrpcService> logger)
         {
-            _service = service;
+            _authService = authService;
             _chatRoomRepository = chatRoomRepository;
             _logger = logger;
         }

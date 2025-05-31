@@ -21,11 +21,11 @@ message GetUserInfoRequest {
 
 message UserInfoResponse {
     bool success = 1;
-    UserDto user = 2;
+    UserData user = 2;
     string error_message = 3;
 }
 
-message UserDto {
+message UserData {
     int32 id = 1;
     string user_name = 2;
     string display_name = 3;
@@ -37,6 +37,6 @@ message GetUsersInfoBatchRequest {
 
 message GetUsersInfoBatchResponse {
     bool success = 1;
-    map<int32, UserDto> users = 2;
+    map<int32, UserData> users = 2;
     string error_message = 3;
 }

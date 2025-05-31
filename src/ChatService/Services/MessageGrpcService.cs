@@ -4,16 +4,16 @@ using Grpc.Core;
 using Shared.DTOs.Message;
 using Shared.Protos;
 
-namespace ChatService.Repositories
+namespace ChatService.Services
 {
     public class MessageGrpcService : IMessageGrpcService
     {
-        private readonly MessageGrpcService.MessageGrpcServiceClient _client;
-        private readonly ILogger<MessageInfoGrpcService> _logger;
+        private readonly Shared.Protos.MessageGrpcService.MessageGrpcServiceClient _client;
+        private readonly ILogger<MessageGrpcService> _logger;
         private readonly IMapperFactory _mapperFactory;
 
         public MessageGrpcService(
-            MessageGrpcService.MessageGrpcServiceClient client,
+            Shared.Protos.MessageGrpcService.MessageGrpcServiceClient client,
             ILogger<MessageGrpcService> logger,
             IMapperFactory mapperFactory)
         {
@@ -23,7 +23,7 @@ namespace ChatService.Repositories
         }
 
         /// <inheritdoc/>
-        public async Task<MessageDto?> GetLastMessageAsync(int chatRoomId)
+        public async Task<MessageDto> GetLastMessageAsync(int chatRoomId)
         {
             try
             {

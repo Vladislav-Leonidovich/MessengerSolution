@@ -1,10 +1,9 @@
 ﻿using System.Text.Json;
 using ChatService.Data;
 using ChatService.Models;
+using ChatService.Sagas.ChatCreation.Events;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Shared.Sagas;
 
 namespace ChatService.BackgroundServices
 {

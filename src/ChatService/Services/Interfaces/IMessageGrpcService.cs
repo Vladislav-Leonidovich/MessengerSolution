@@ -9,7 +9,7 @@ namespace ChatService.Services.Interfaces
         /// </summary>
         /// <param name="chatRoomId">Ідентифікатор чату</param>
         /// <returns>Об'єкт повідомлення або null, якщо повідомлень немає</returns>
-        Task<MessageDto?> GetLastMessageAsync(int chatRoomId);
+        Task<MessageDto> GetLastMessageAsync(int chatRoomId);
 
         /// <summary>
         /// Отримує останні повідомлення для декількох чатів
@@ -19,4 +19,4 @@ namespace ChatService.Services.Interfaces
         Task<Dictionary<int, MessageDto>> GetLastMessagesBatchAsync(IEnumerable<int> chatRoomIds);
     }
 }
-}
+

@@ -1,4 +1,5 @@
 ﻿using IdentityService.Data;
+using IdentityService.Models;
 using IdentityService.Repositories.Interfaces;
 using IdentityService.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ namespace IdentityService.Services
                 {
                     return ApiResponse<UserDto>.Fail("Username cannot be null or empty.");
                 }
-                var user = await _userRepository.GetUsersByUsernameAsync(username);
+                var user = await _userRepository.GetUserByUsernameAsync(username);
                 return ApiResponse<UserDto>.Ok(user, "User found successfully.");
             }
             catch (EntityNotFoundException ex)
@@ -56,7 +57,7 @@ namespace IdentityService.Services
         {
             try
             {
-                var user = await _userRepository.GetUsersByUserIdAsync(userId);
+                var user = await _userRepository.GetUserByUserIdAsync(userId);
                 return ApiResponse<UserDto>.Ok(user, "User found successfully.");
             }
             catch (EntityNotFoundException ex)
@@ -78,6 +79,34 @@ namespace IdentityService.Services
             {
                 _logger.LogError(ex, "Error occurred while searching for user by userId: {UserId}", userId);
                 return ApiResponse<UserDto>.Fail("An error occurred while processing your request.");
+            }
+        }
+
+        public async Task<ApiResponse<IEnumerable<UserDto>>> SearchUsersBatchByUserIdAsync(IEnumerable<int> userIds)
+        {
+            try
+            {
+                if (userIds == null || !userIds.Any())
+                {
+                    return ApiResponse<IEnumerable<UserDto>>.Fail("Usernames cannot be null or empty.");
+                }
+                var users = await _userRepository.GetUsersBatchByUserIdAsync(userIds);
+                return ApiResponse<IEnumerable<UserDto>>.Ok(users, "Users found successfully.");
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Users not found with userIds: {UserIds}", userIds);
+                return ApiResponse<IEnumerable<UserDto>>.Fail("User not found.");
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Database error occurred while searching for users by usernames.");
+                return ApiResponse<IEnumerable<UserDto>>.Fail("An error occurred while processing your request. Please try again later.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while searching for users by usernames.");
+                return ApiResponse<IEnumerable<UserDto>>.Fail("An error occurred while processing your request.");
             }
         }
     }

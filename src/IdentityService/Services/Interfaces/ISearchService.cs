@@ -7,5 +7,6 @@ namespace IdentityService.Services.Interfaces
     {
         Task<ApiResponse<UserDto>> SearchUsersByUsernameAsync(string username);
         Task<ApiResponse<UserDto>> SearchUsersByUserIdAsync(int userId);
+        Task<ApiResponse<IEnumerable<UserDto>>> SearchUsersBatchByUserIdAsync(IEnumerable<int> userIds);
     }
 }

@@ -6,7 +6,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using Shared.IdentityServiceDTOs;
 using Shared.DTOs.Identity;
 using IdentityService.Services.Interfaces;
 

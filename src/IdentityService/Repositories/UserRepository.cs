@@ -16,7 +16,7 @@ namespace IdentityService.Repositories
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        public async Task<UserDto> GetUsersByUserIdAsync(int userId)
+        public async Task<UserDto> GetUserByUserIdAsync(int userId)
         {
             try
             {
@@ -45,7 +45,7 @@ namespace IdentityService.Repositories
             }
         }
 
-        public async Task<UserDto> GetUsersByUsernameAsync(string username)
+        public async Task<UserDto> GetUserByUsernameAsync(string username)
         {
             try
             {
@@ -76,6 +76,35 @@ namespace IdentityService.Repositories
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка при отриманні користувача з іменем користувача {Username}", username);
+                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+            }
+        }
+
+        public async Task<IEnumerable<UserDto>> GetUsersBatchByUserIdAsync(IEnumerable<int> userIds)
+        {
+            try
+            {
+                _logger.LogInformation("Отримання всіх користувачів");
+                var users = await _context.Users
+                    .Where(u => userIds.Contains(u.Id))
+                    .Select(u => new UserDto
+                    {
+                        Id = u.Id,
+                        UserName = u.UserName,
+                        DisplayName = u.DisplayName
+                    })
+                    .ToListAsync();
+                if (users == null || !users.Any())
+                {
+                    _logger.LogWarning("Не знайдено жодного користувача");
+                    return new List<UserDto>();
+                }
+
+                return users;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні всіх користувачів");
                 throw new DatabaseException("Помилка при доступі до бази даних", ex);
             }
         }

@@ -8,7 +8,7 @@ using Shared.Protos;
 namespace IdentityService.Services
 {
     [Authorize]
-    public class IdentityGrpcService : Shared.Protos.IdentityService.IdentityServiceBase
+    public class IdentityGrpcService : Shared.Protos.IdentityGrpcService.IdentityGrpcServiceBase
     {
         private readonly ISearchService _searchService;
         private readonly ILogger<IdentityGrpcService> _logger;
@@ -19,7 +19,7 @@ namespace IdentityService.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(searchService));
         }
 
-        public override async Task<UserInfoResponse> GetUserInfo(GetUserInfoRequest request, ServerCallContext context)
+        public async Task<UserInfoResponse> GetUserInfo(GetUserInfoRequest request, ServerCallContext context)
         {
             try
             {
@@ -32,7 +32,7 @@ namespace IdentityService.Services
                     return new UserInfoResponse
                     {
                         Success = true,
-                        User = new UserDto
+                        User = new UserData
                         {
                             Id = result.Data.Id,
                             UserName = result.Data.UserName,
@@ -60,31 +60,35 @@ namespace IdentityService.Services
             }
         }
 
-        public override async Task<GetUsersInfoBatchResponse> GetUsersInfoBatch(
+        public async Task<GetUsersInfoBatchResponse> GetUsersInfoBatch(
             GetUsersInfoBatchRequest request,
             ServerCallContext context)
         {
             try
             {
-                var users = await _context.Users
-                    .Where(u => request.UserIds.Contains(u.Id))
-                    .Select(u => new UserInfo
+                var users = await _searchService.SearchUsersBatchByUserIdAsync(request.UserIds);
+                if (users == null ||  users.Data == null || !users.Data.Any())
+                {
+                    _logger.LogWarning("Не знайдено користувачів для ID: {UserIds}", string.Join(", ", request.UserIds));
+                    return new GetUsersInfoBatchResponse
                     {
-                        Id = u.Id,
-                        UserName = u.UserName,
-                        DisplayName = u.DisplayName,
-                        Email = u.Email
-                    })
-                    .ToListAsync();
-
+                        Success = false,
+                        ErrorMessage = "Користувачі не знайдені"
+                    };
+                }
                 var response = new GetUsersInfoBatchResponse
                 {
                     Success = true
                 };
 
-                foreach (var user in users)
+                foreach (var user in users.Data)
                 {
-                    response.Users.Add(user.Id, user);
+                    response.Users.Add(user.Id, new UserData
+                    {
+                        Id = user.Id,
+                        UserName = user.UserName,
+                        DisplayName = user.DisplayName
+                    });
                 }
 
                 return response;

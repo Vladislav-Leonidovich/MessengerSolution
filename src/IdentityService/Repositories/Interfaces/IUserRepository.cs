@@ -4,7 +4,8 @@ namespace IdentityService.Repositories.Interfaces
 {
     public interface IUserRepository
     {
-        Task<UserDto> GetUsersByUsernameAsync(string username);
-        Task<UserDto> GetUsersByUserIdAsync(int userId);
+        Task<UserDto> GetUserByUsernameAsync(string username);
+        Task<UserDto> GetUserByUserIdAsync(int userId);
+        Task<IEnumerable<UserDto>> GetUsersBatchByUserIdAsync(IEnumerable<int> userIds);
     }
 }

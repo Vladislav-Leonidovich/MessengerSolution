@@ -6,7 +6,6 @@ using Shared.Exceptions;
 using MessageService.Authorization;
 using MessageService.Services.Interfaces;
 using System.Security.Claims;
-using Shared.Sagas;
 using Shared.DTOs.Message;
 using Shared.DTOs.Responses;
 using MessageService.Models;
