@@ -35,9 +35,9 @@ namespace ChatService.Services
                 };
 
                 var response = await _client.GetLastMessageAsync(request);
-                if (response != null)
+                if (response != null && response.Data != null)
                 {
-                    return await _mapperFactory.GetMapper<MessageData, MessageDto>().MapToDtoAsync(response);
+                    return await _mapperFactory.GetMapper<MessageData, MessageDto>().MapToDtoAsync(response.Data);
                 }
 
                 return new MessageDto();

@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
-using Shared.IdentityServiceDTOs;
 using Microsoft.EntityFrameworkCore;
+using Shared.DTOs.Identity;
 
 namespace IdentityService.Controllers
 {

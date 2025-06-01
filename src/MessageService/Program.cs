@@ -19,7 +19,6 @@ using Shared.Protos;
 using MessageService.BackgroundServices;
 using MessageService.Sagas.MessageDelivery.Consumers;
 using MessageService.Sagas.MessageDelivery;
-using MessageService.Authorization.ChatService.Authorization;
 using Shared.Authorization.Permissions;
 using Shared.Authorization;
 using MessageService.Sagas.DeleteAllMessages.Consumers;
@@ -31,7 +30,7 @@ builder.Services.AddDbContext<MessageDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 
 builder.Services.AddDbContext<MessageDeliverySagaDbContext>(options =>
-    options.UseMySQL(builder.Configuration.GetConnectionString("SagaDatabase")));
+    options.UseMySQL(builder.Configuration.GetConnectionString("MessageDatabase")));
 
 builder.Services.AddScoped<IMessageService, MessageService.Services.MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();

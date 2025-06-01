@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using IdentityService.Data;
+using IdentityService.Repositories.Interfaces;
+using IdentityService.Repositories;
 using IdentityService.Services;
 using IdentityService.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -34,6 +36,7 @@ builder.Services.AddControllers();
 // Реєструємо наші сервіси
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // Додати gRPC сервіси
 builder.Services.AddGrpc();

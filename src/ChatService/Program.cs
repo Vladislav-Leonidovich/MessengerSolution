@@ -18,6 +18,12 @@ using ChatService.BackgroundServices;
 using ChatService.Sagas.ChatCreation.Consumers;
 using ChatService.Configuration;
 using ChatService.Sagas.ChatCreation;
+using ChatService.Mappers.Interfaces;
+using ChatService.Mappers;
+using ChatService.Consumers.ChatOperations;
+using static Org.BouncyCastle.Math.EC.ECCurve;
+using MySql.Data.MySqlClient;
+using MessageService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,10 +93,15 @@ builder.Services.AddHttpClient("MessageClient", client =>
 
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<ChatOperationStartCommandConsumer>();
+    x.AddConsumer<ChatOperationProgressCommandConsumer>();
+    x.AddConsumer<ChatOperationCompleteCommandConsumer>();
+    x.AddConsumer<ChatOperationFailCommandConsumer>();
+    x.AddConsumer<ChatOperationCompensateCommandConsumer>();
     x.AddConsumer<CreateChatRoomCommandConsumer>();
     x.AddConsumer<NotifyMessageServiceCommandConsumer>();
-    x.AddConsumer<CompensateChatCreationCommandConsumer>();
     x.AddConsumer<CompleteChatCreationCommandConsumer>();
+    x.AddConsumer<CompensateChatCreationCommandConsumer>();
 
     x.ConfigureChatOperationConsumers();
     x.AddSagaStateMachine<ChatCreationSagaStateMachine, ChatCreationSagaState>()
@@ -166,12 +177,22 @@ builder.Services.AddScoped<IChatAuthorizationService, ChatAuthorizationService>(
 
 // Реєстрація сервісу детальних дозволів
 builder.Services.AddScoped<IPermissionService<ChatPermission>, ChatPermissionService>();
-
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddScoped<IEventPublisher, OutboxEventPublisher>();
 builder.Services.AddScoped<CreateChatRoomCommandConsumer>();
 builder.Services.AddScoped<NotifyMessageServiceCommandConsumer>();
 builder.Services.AddScoped<CompensateChatCreationCommandConsumer>();
+builder.Services.AddScoped<CompleteChatCreationCommandConsumer>();
+builder.Services.AddScoped<IChatOperationService, ChatOperationService>();
+
+builder.Services.AddSingleton<IMapperFactory, MapperFactory>();
+builder.Services.AddScoped<IEntityMapper<ChatService.Models.GroupChatRoom, Shared.DTOs.Chat.GroupChatRoomDto>, GroupChatRoomMapper>();
+builder.Services.AddScoped<IEntityMapper<ChatService.Models.GroupChatMember, Shared.DTOs.Chat.GroupChatMemberDto>, GroupChatMemberMapper>();
+builder.Services.AddScoped<IEntityMapper<ChatService.Models.PrivateChatRoom, Shared.DTOs.Chat.ChatRoomDto>, PrivateChatRoomMapper>();
+builder.Services.AddScoped<IEntityMapper<ChatService.Models.Folder, Shared.DTOs.Folder.FolderDto>, FolderMapper>();
+builder.Services.AddScoped<IEntityMapper<Shared.Protos.MessageData, Shared.DTOs.Message.MessageDto>, MessageMapper>();
+builder.Services.AddScoped<IEntityMapper<Shared.Protos.UserData, Shared.DTOs.Identity.UserDto>, UserMapper>();
 
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();

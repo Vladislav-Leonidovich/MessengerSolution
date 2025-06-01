@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc;
-using Shared.Responses;
+using Shared.DTOs.Responses;
 
 namespace MessageService.Attributes
 {

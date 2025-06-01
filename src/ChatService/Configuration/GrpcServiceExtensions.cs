@@ -16,18 +16,17 @@ namespace ChatService.Configuration
         {
             // Отримуємо URL MessageService з конфігурації
             var messageServiceUrl = configuration["GrpcServices:MessageService"];
-
             if (string.IsNullOrEmpty(messageServiceUrl))
             {
                 throw new ArgumentException("URL для MessageService не налаштовано у конфігурації");
             }
 
-            // Створюємо канал для gRPC
-            services.AddSingleton(serviceProvider =>
+            // Змінено з AddSingleton на AddScoped
+            services.AddScoped(serviceProvider =>
             {
                 var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+                var tokenService = serviceProvider.GetRequiredService<ITokenService>();
                 var httpClient = httpClientFactory.CreateClient("MessageServiceGrpc");
-
                 var channel = GrpcChannel.ForAddress(messageServiceUrl, new GrpcChannelOptions
                 {
                     HttpClient = httpClient,
@@ -38,20 +37,16 @@ namespace ChatService.Configuration
                 // Створюємо функцію для отримання токена
                 Func<Task<string>> tokenProvider = async () =>
                 {
-                    // Тут можна додати логіку отримання токена аутентифікації
-                    // Наприклад, з TokenService або з HttpContext
-                    return ""; 
+                    return await tokenService.GetTokenAsync();
                 };
 
                 var logger = serviceProvider.GetRequiredService<ILogger<AuthGrpcInterceptor>>();
                 var interceptor = new AuthGrpcInterceptor(tokenProvider, logger);
-
                 return new MessageGrpcService.MessageGrpcServiceClient(channel.Intercept(interceptor));
             });
 
             // Реєструємо сервіс
-            services.AddScoped<IMessageGrpcService, ChatService.Services.MessageGrpcService>();
-
+            services.AddScoped<IMessageGrpcService, Services.MessageGrpcService>();
             return services;
         }
     }

@@ -1,4 +1,5 @@
-﻿using Yarp.ReverseProxy.Configuration;
+﻿using Microsoft.Extensions.Primitives;
+using Yarp.ReverseProxy.Configuration;
 
 namespace Gateway.Services
 {
@@ -6,7 +7,7 @@ namespace Gateway.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<DynamicProxyConfigProvider> _logger;
-        private volatile ProxyConfig _config;
+        private volatile YarpConfig _config;
 
         public DynamicProxyConfigProvider(
             IConfiguration configuration,
@@ -33,7 +34,7 @@ namespace Gateway.Services
             }
         }
 
-        private ProxyConfig LoadConfig()
+        private YarpConfig LoadConfig()
         {
             var routes = new List<RouteConfig>();
             var clusters = new List<ClusterConfig>();
@@ -45,10 +46,85 @@ namespace Gateway.Services
             var routesSection = proxySection.GetSection("Routes");
             var clustersSection = proxySection.GetSection("Clusters");
 
-            // Перетворюємо налаштування у відповідні конфігураційні об'єкти
-            // ... (код для парсингу конфігурації)
+            // Парсимо маршрути
+            foreach (var routeSection in routesSection.GetChildren())
+            {
+                var routeId = routeSection.Key;
 
-            return new ProxyConfig(routes, clusters);
+                // Отримуємо ClusterId для маршруту
+                var clusterId = routeSection.GetValue<string>("ClusterId");
+
+                // Отримуємо конфігурацію Match
+                var matchSection = routeSection.GetSection("Match");
+                var matchConfig = new RouteMatch
+                {
+                    Path = matchSection.GetValue<string>("Path")
+                    // Тут можна додати інші властивості Match (Methods, Headers, тощо)
+                };
+
+                // Створюємо об'єкт маршруту
+                var route = new RouteConfig
+                {
+                    RouteId = routeId,
+                    ClusterId = clusterId,
+                    Match = matchConfig
+                    // Можна додати інші налаштування за потреби (Transforms, Metadata, тощо)
+                };
+
+                routes.Add(route);
+            }
+
+            // Парсимо кластери
+            foreach (var clusterSection in clustersSection.GetChildren())
+            {
+                var clusterId = clusterSection.Key;
+                var destinationsSection = clusterSection.GetSection("Destinations");
+
+                var destinations = new Dictionary<string, DestinationConfig>();
+
+                // Парсимо призначення для кластера
+                foreach (var destinationSection in destinationsSection.GetChildren())
+                {
+                    var destinationId = destinationSection.Key;
+                    var address = destinationSection.GetValue<string>("Address");
+
+                    destinations[destinationId] = new DestinationConfig
+                    {
+                        Address = address
+                        // Можна додати інші налаштування призначення за потреби
+                    };
+                }
+
+                // Створюємо об'єкт кластера
+                var cluster = new ClusterConfig
+                {
+                    ClusterId = clusterId,
+                    Destinations = destinations
+                    // Можна додати інші налаштування кластера за потреби (HttpClient, Metadata, тощо)
+                };
+
+                clusters.Add(cluster);
+            }
+
+            _logger.LogInformation("Завантажено {RouteCount} маршрутів та {ClusterCount} кластерів",
+                routes.Count, clusters.Count);
+
+            return new YarpConfig(routes, clusters);
+        }
+
+        // Внутрішній клас для імплементації IProxyConfig
+        private class YarpConfig : IProxyConfig
+        {
+            public YarpConfig(IReadOnlyList<RouteConfig> routes, IReadOnlyList<ClusterConfig> clusters)
+            {
+                Routes = routes;
+                Clusters = clusters;
+                ChangeToken = new CancellationChangeToken(CancellationToken.None);
+            }
+
+            public IReadOnlyList<RouteConfig> Routes { get; }
+            public IReadOnlyList<ClusterConfig> Clusters { get; }
+            public IChangeToken ChangeToken { get; }
         }
     }
 }

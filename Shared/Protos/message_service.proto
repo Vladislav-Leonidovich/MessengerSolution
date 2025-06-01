@@ -7,7 +7,7 @@ package message;
 import "google/protobuf/timestamp.proto";
 
 service MessageGrpcService {
-  rpc GetLastMessage (LastMessageRequest) returns (MessageData);
+  rpc GetLastMessage (LastMessageRequest) returns (ApiResponse);
   rpc GetLastMessagesBatch (LastMessagesBatchRequest) returns (LastMessagesBatchResponse);
 }
 
@@ -22,6 +22,12 @@ enum MessageStatus {
 
 message LastMessageRequest {
   int32 chat_room_id = 1;
+}
+
+message ApiResponse {
+  bool success = 1;
+  string error_message = 2;
+  MessageData data = 3;
 }
 
 message MessageData {
@@ -43,4 +49,6 @@ message LastMessagesBatchRequest {
 
 message LastMessagesBatchResponse {
   map<int32, MessageData> messages = 1;
+  bool success = 2;
+  string error_message = 3;
 }
