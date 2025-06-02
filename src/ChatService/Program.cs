@@ -24,12 +24,19 @@ using ChatService.Consumers.ChatOperations;
 using static Org.BouncyCastle.Math.EC.ECCurve;
 using MySql.Data.MySqlClient;
 using MessageService.Services;
+using Shared.Interceptors;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("ChatDatabase") ??
         throw new InvalidOperationException("Connection string 'ChatDatabase' not found.")));
+
+builder.Services.AddGrpc(options => {
+    options.Interceptors.Add<ServerAuthInterceptor>();
+});
+
+builder.Services.AddScoped<ServerAuthInterceptor>();
 
 // Додайте CORS-сервіси
 builder.Services.AddCors(options =>
@@ -75,21 +82,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
-
-// Реєструємо обробник
-builder.Services.AddTransient<InternalAuthHandler>();
-
-builder.Services.AddHttpClient("IdentityClient", client =>
-{
-    client.BaseAddress = new Uri("https://localhost:7101/");
-})
-.AddHttpMessageHandler<InternalAuthHandler>();
-
-builder.Services.AddHttpClient("MessageClient", client =>
-{
-    client.BaseAddress = new Uri("https://localhost:7103/");
-})
-.AddHttpMessageHandler<InternalAuthHandler>();
 
 builder.Services.AddMassTransit(x =>
 {
@@ -198,7 +190,6 @@ builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<OutboxCleanupService>();
 builder.Services.AddChatOperationServices();
 builder.Services.AddGrpcClients(builder.Configuration);
-builder.Services.AddGrpc();
 
 builder.Services.AddControllers();
 

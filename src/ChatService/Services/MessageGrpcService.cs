@@ -1,11 +1,13 @@
 ﻿using ChatService.Mappers.Interfaces;
 using ChatService.Services.Interfaces;
 using Grpc.Core;
+using Microsoft.AspNetCore.Authorization;
 using Shared.DTOs.Message;
 using Shared.Protos;
 
 namespace ChatService.Services
 {
+    [Authorize]
     public class MessageGrpcService : IMessageGrpcService
     {
         private readonly Shared.Protos.MessageGrpcService.MessageGrpcServiceClient _client;

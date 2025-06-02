@@ -1,12 +1,14 @@
 ﻿using ChatService.Mappers.Interfaces;
 using ChatService.Services.Interfaces;
 using Grpc.Core;
+using Microsoft.AspNetCore.Authorization;
 using Shared.DTOs.Identity;
 using Shared.Exceptions;
 using Shared.Protos;
 
 namespace ChatService.Services
 {
+    [Authorize]
     public class IdentityGrpcService : IIdentityGrpcService
     {
         private readonly Shared.Protos.IdentityGrpcService.IdentityGrpcServiceClient _client;

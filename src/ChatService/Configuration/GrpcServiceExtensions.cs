@@ -1,5 +1,6 @@
 ﻿using ChatService.Repositories;
 using ChatService.Services.Interfaces;
+using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using Shared.Interceptors;
@@ -14,40 +15,43 @@ namespace ChatService.Configuration
         /// </summary>
         public static IServiceCollection AddGrpcClients(this IServiceCollection services, IConfiguration configuration)
         {
-            // Отримуємо URL MessageService з конфігурації
-            var messageServiceUrl = configuration["GrpcServices:MessageService"];
-            if (string.IsNullOrEmpty(messageServiceUrl))
+            ConfigureGrpcClient<MessageGrpcService.MessageGrpcServiceClient>(
+        services, configuration["GrpcServices:MessageService"]);
+
+            // Настройка для IdentityService 
+            ConfigureGrpcClient<IdentityGrpcService.IdentityGrpcServiceClient>(
+                services, configuration["GrpcServices:IdentityService"]);
+
+            return services;
+        }
+
+        private static void ConfigureGrpcClient<TClient>(IServiceCollection services, string serviceUrl)
+    where TClient : ClientBase<TClient>
+        {
+            if (string.IsNullOrEmpty(serviceUrl))
             {
-                throw new ArgumentException("URL для MessageService не налаштовано у конфігурації");
+                throw new ArgumentException($"URL для {typeof(TClient).Name} не налаштовано у конфігурації");
             }
 
-            // Змінено з AddSingleton на AddScoped
             services.AddScoped(serviceProvider =>
             {
                 var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
                 var tokenService = serviceProvider.GetRequiredService<ITokenService>();
-                var httpClient = httpClientFactory.CreateClient("MessageServiceGrpc");
-                var channel = GrpcChannel.ForAddress(messageServiceUrl, new GrpcChannelOptions
+                var httpClient = httpClientFactory.CreateClient(typeof(TClient).Name);
+
+                var channel = GrpcChannel.ForAddress(serviceUrl, new GrpcChannelOptions
                 {
                     HttpClient = httpClient,
-                    MaxReceiveMessageSize = 100 * 1024 * 1024, // 100 MB
-                    MaxSendMessageSize = 100 * 1024 * 1024     // 100 MB
+                    MaxReceiveMessageSize = 16 * 1024 * 1024,
+                    MaxSendMessageSize = 16 * 1024 * 1024
                 });
 
-                // Створюємо функцію для отримання токена
-                Func<Task<string>> tokenProvider = async () =>
-                {
-                    return await tokenService.GetTokenAsync();
-                };
-
+                Func<Task<string>> tokenProvider = async () => await tokenService.GetTokenAsync();
                 var logger = serviceProvider.GetRequiredService<ILogger<AuthGrpcInterceptor>>();
                 var interceptor = new AuthGrpcInterceptor(tokenProvider, logger);
-                return new MessageGrpcService.MessageGrpcServiceClient(channel.Intercept(interceptor));
-            });
 
-            // Реєструємо сервіс
-            services.AddScoped<IMessageGrpcService, Services.MessageGrpcService>();
-            return services;
+                return (TClient)Activator.CreateInstance(typeof(TClient), channel.Intercept(interceptor));
+            });
         }
     }
 }
