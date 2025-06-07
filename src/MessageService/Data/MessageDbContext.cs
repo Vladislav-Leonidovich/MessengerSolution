@@ -15,6 +15,7 @@ namespace MessageService.Data
         // Таблица сообщений
         public DbSet<Message> Messages { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
+        public DbSet<MessageOperation> MessageOperations { get; set; }
         public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
 
         // При необходимости можно переопределить OnModelCreating для дополнительной конфигурации моделей
@@ -39,6 +40,21 @@ namespace MessageService.Data
 
             modelBuilder.Entity<ProcessedEvent>()
                 .HasIndex(p => p.ProcessedAt);
+
+            modelBuilder.Entity<MessageOperation>()
+                .HasKey(mo => mo.CorrelationId);
+
+            modelBuilder.Entity<MessageOperation>()
+                .HasIndex(mo => mo.MessageId);
+
+            modelBuilder.Entity<MessageOperation>()
+                .HasIndex(mo => mo.ChatRoomId);
+
+            modelBuilder.Entity<MessageOperation>()
+                .HasIndex(mo => mo.Status);
+
+            modelBuilder.Entity<MessageOperation>()
+                .HasIndex(mo => mo.CreatedAt);
         }
     }
 }

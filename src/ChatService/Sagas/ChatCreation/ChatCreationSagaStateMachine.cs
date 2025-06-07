@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using ChatService.Sagas.ChatCreation.Events;
+using ChatService.Sagas.ChatOperation.Events;
 using ChatService.Services.Interfaces;
 using MassTransit;
 using Shared.DTOs.Chat;

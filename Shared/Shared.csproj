@@ -36,7 +36,6 @@
 		<Folder Include="DTOs\Chat\" />
 		<Folder Include="DTOs\Encryption\" />
 		<Folder Include="DTOs\Identity\" />
-		<Folder Include="DTOs\Message\" />
 		<Folder Include="DTOs\Common\" />
 		<Folder Include="DTOs\Responses\" />
 		<Folder Include="Authorization\" />

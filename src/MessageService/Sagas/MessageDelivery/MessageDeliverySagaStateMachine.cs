@@ -2,6 +2,9 @@
 using MassTransit;
 using MessageService.Services.Interfaces;
 using MessageService.Sagas.MessageDelivery.Events;
+using Shared.DTOs.Chat;
+using MessageService.Sagas.MessageOperation.Events;
+using Shared.DTOs.Message;
 
 namespace MessageService.Sagas.MessageDelivery
 {
@@ -41,14 +44,27 @@ namespace MessageService.Sagas.MessageDelivery
                         context.Saga.SenderUserId = context.Message.SenderUserId;
                         context.Saga.CreatedAt = DateTime.UtcNow;
                     })
-                    .Publish(context => new SaveMessageCommand
+                    .PublishAsync(context => context.Init<MessageOperationStartCommand>(new
+                    {
+                        CorrelationId = context.Message.CorrelationId,
+                        OperationType = MessageOperationType.SendMessage,
+                        UserId = context.Message.SenderUserId,
+                        MessageId = context.Message.MessageId,
+                        ChatRoomId = context.Message.ChatRoomId,
+                        OperationData = new SendMessageDto
+                        {
+                            ChatRoomId = context.Message.ChatRoomId,
+                            Content = context.Message.Content
+                        }
+                    }))
+                    .PublishAsync(context => context.Init<SaveMessageCommand>(new
                     {
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Message.MessageId,
                         ChatRoomId = context.Message.ChatRoomId,
                         SenderUserId = context.Message.SenderUserId,
                         Content = context.Message.Content
-                    })
+                    }))
                     .TransitionTo(SavingMessage)
             );
 
@@ -61,6 +77,14 @@ namespace MessageService.Sagas.MessageDelivery
 
                         context.Saga.IsSaved = true;
                         context.Saga.EncryptedContent = context.Message.EncryptedContent;
+
+                        // Оновлюємо прогрес операції
+                        context.Publish(new MessageOperationProgressCommand
+                        {
+                            CorrelationId = context.Message.CorrelationId,
+                            Progress = 50,
+                            StatusMessage = "Повідомлення створено"
+                        });
                     })
                     .Publish(context => new PublishMessageCommand
                     {
@@ -79,6 +103,14 @@ namespace MessageService.Sagas.MessageDelivery
                             context.Saga.MessageId, context.Message.Reason);
 
                         context.Saga.ErrorMessage = context.Message.Reason;
+
+                        // Позначаємо операцію як невдалу
+                        context.Publish(new MessageOperationFailCommand
+                        {
+                            CorrelationId = context.Saga.CorrelationId,
+                            ErrorMessage = context.Message.Reason,
+                            ErrorCode = "MESSAGE_CREATION_FAILED"
+                        });
                     })
                     .TransitionTo(Failed)
             );
@@ -109,6 +141,14 @@ namespace MessageService.Sagas.MessageDelivery
                             context.Saga.MessageId, context.Message.Reason);
 
                         context.Saga.ErrorMessage = context.Message.Reason;
+
+                        // Позначаємо операцію як невдалу
+                        context.Publish(new MessageOperationFailCommand
+                        {
+                            CorrelationId = context.Saga.CorrelationId,
+                            ErrorMessage = context.Message.Reason,
+                            ErrorCode = "MESSAGE_PUBLISH_FAILED"
+                        });
                     })
                     .TransitionTo(Failed)
             );
@@ -186,6 +226,14 @@ namespace MessageService.Sagas.MessageDelivery
                             context.Saga.MessageId, context.Message.Reason);
 
                         context.Saga.ErrorMessage = context.Message.Reason;
+
+                        // Позначаємо операцію як невдалу
+                        context.Publish(new MessageOperationFailCommand
+                        {
+                            CorrelationId = context.Saga.CorrelationId,
+                            ErrorMessage = context.Message.Reason,
+                            ErrorCode = "OPERATION_TIMEOUT"
+                        });
                     })
                     .TransitionTo(Failed)
             );

@@ -16,18 +16,18 @@ namespace ChatService.Repositories
     public class ChatRoomRepository : IChatRoomRepository
     {
         private readonly ChatDbContext _context;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IIdentityGrpcService _identityGrpcService;
         private readonly IMessageGrpcService _messageInfoService;
         private readonly IMapperFactory _mapperFactory;
 
         public ChatRoomRepository(
             ChatDbContext context,
-            IHttpClientFactory httpClientFactory,
+            IIdentityGrpcService identityGrpcService,
             IMessageGrpcService messageInfoService,
             IMapperFactory mapperFactory)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
-            _httpClientFactory = httpClientFactory;
+            _identityGrpcService = identityGrpcService ?? throw new ArgumentNullException(nameof(identityGrpcService));
             _messageInfoService = messageInfoService ?? throw new ArgumentNullException(nameof(messageInfoService));
             _mapperFactory = mapperFactory ?? throw new ArgumentNullException(nameof(mapperFactory));
         }
@@ -691,12 +691,10 @@ namespace ChatService.Repositories
 
             try
             {
-                // Запит до сервісу ідентифікації для отримання імені користувача
-                var identityClient = _httpClientFactory.CreateClient("IdentityClient");
-                var userDto = await identityClient.GetFromJsonAsync<UserDto>($"api/users/search/id/{partnerId.Value}");
+                var userDto = await _identityGrpcService.GetUserInfoAsync(partnerId.Value);
                 return userDto?.DisplayName ?? $"Користувач {partnerId.Value}";
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return $"Користувач {partnerId.Value}";
             }

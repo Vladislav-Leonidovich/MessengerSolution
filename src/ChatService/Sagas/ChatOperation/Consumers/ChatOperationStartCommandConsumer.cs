@@ -1,10 +1,10 @@
 ﻿using ChatService.Data;
-using ChatService.Sagas.ChatCreation.Events;
+using ChatService.Sagas.ChatOperation.Events;
 using ChatService.Services.Interfaces;
 using MassTransit;
 using Shared.Consumers;
 
-namespace ChatService.Consumers.ChatOperations
+namespace ChatService.Sagas.ChatOperation.Consumers
 {
     public class ChatOperationStartCommandConsumer : IdempotentConsumer<ChatOperationStartCommand, ChatDbContext>
     {

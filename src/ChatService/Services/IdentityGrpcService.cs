@@ -84,10 +84,16 @@ namespace ChatService.Services
                 }
                 return result;
             }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "Помилка gRPC батч-запиту користувачів: {Status} - {Message}",
+                    ex.StatusCode, ex.Message);
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка при отриманні інформації про користувачів");
-                return new Dictionary<int, UserDto>();
+                throw;
             }
         }
     }

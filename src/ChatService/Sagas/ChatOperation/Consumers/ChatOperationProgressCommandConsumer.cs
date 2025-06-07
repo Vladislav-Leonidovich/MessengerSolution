@@ -3,8 +3,9 @@ using ChatService.Sagas.ChatCreation.Events;
 using ChatService.Services.Interfaces;
 using MassTransit;
 using Shared.Consumers;
+using ChatService.Sagas.ChatOperation.Events;
 
-namespace ChatService.Consumers.ChatOperations
+namespace ChatService.Sagas.ChatOperation.Consumers
 {
     public class ChatOperationProgressCommandConsumer : IdempotentConsumer<ChatOperationProgressCommand, ChatDbContext>
     {

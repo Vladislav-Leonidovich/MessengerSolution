@@ -1,11 +1,12 @@
 ﻿using System.Reflection;
-using ChatService.Sagas.ChatCreation;
-using ChatService.Sagas.ChatCreation.Consumers;
-using ChatService.Sagas.ChatOperation.Consumers;
 using MassTransit;
-using Microsoft.EntityFrameworkCore;
+using MessageService.Data;
+using MessageService.Sagas.DeleteAllMessages;
+using MessageService.Sagas.DeleteAllMessages.Consumers;
+using MessageService.Sagas.MessageDelivery;
+using MessageService.Sagas.MessageDelivery.Consumers;
 
-namespace ChatService.Configuration
+namespace MessageService.Configuration
 {
     public static class MassTransitExtensions
     {
@@ -22,25 +23,30 @@ namespace ChatService.Configuration
                 // Автоматична реєстрація всіх Consumer'ів з поточної збірки
                 busConfigurator.AddConsumers(Assembly.GetExecutingAssembly());
 
-                // Реєстрація конкретних Consumer'ів для ChatOperation
-                busConfigurator.AddConsumer<ChatOperationStartCommandConsumer>();
-                busConfigurator.AddConsumer<ChatOperationProgressCommandConsumer>();
-                busConfigurator.AddConsumer<ChatOperationCompleteCommandConsumer>();
-                busConfigurator.AddConsumer<ChatOperationFailCommandConsumer>();
-                busConfigurator.AddConsumer<ChatOperationCompensateCommandConsumer>();
+                // Реєстрація споживачів для саги видалення повідомлень
+                busConfigurator.AddConsumer<DeleteChatMessagesCommandConsumer>();
+                busConfigurator.AddConsumer<SendChatNotificationCommandConsumer>();
 
-                // Реєстрація Consumer'ів для Saga
-                busConfigurator.AddConsumer<CreateChatRoomCommandConsumer>();
-                busConfigurator.AddConsumer<NotifyMessageServiceCommandConsumer>();
-                busConfigurator.AddConsumer<CompensateChatCreationCommandConsumer>();
-                busConfigurator.AddConsumer<CompleteChatCreationCommandConsumer>();
+                // Реєстрація споживачів для саги доставки повідомлень
+                busConfigurator.AddConsumer<SaveMessageCommandConsumer>();
+                busConfigurator.AddConsumer<PublishMessageCommandConsumer>();
+                busConfigurator.AddConsumer<CheckDeliveryStatusCommandConsumer>();
+                busConfigurator.AddConsumer<MessageDeliveredToUserEventConsumer>();
+                busConfigurator.AddConsumer<MessageStatusUpdateConsumer>();
 
                 // Реєстрація State Machine Saga
-                busConfigurator.AddSagaStateMachine<ChatCreationSagaStateMachine, ChatCreationSagaState>()
+                busConfigurator.AddSagaStateMachine<MessageDeliverySagaStateMachine, MessageDeliverySagaState>()
                     .EntityFrameworkRepository(r =>
                     {
+                        r.ExistingDbContext<MessageDeliverySagaDbContext>();
                         r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
-                        r.AddDbContext<DbContext, ChatService.Data.ChatDbContext>();
+                    });
+
+                busConfigurator.AddSagaStateMachine<DeleteAllMessagesSagaStateMachine, DeleteAllMessagesSagaState>()
+                    .EntityFrameworkRepository(r =>
+                    {
+                        r.ExistingDbContext<MessageDbContext>();
+                        r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
                     });
 
                 // Налаштування RabbitMQ
@@ -76,65 +82,8 @@ namespace ChatService.Configuration
         /// <param name="configurator">Конфігуратор RabbitMQ</param>
         private static void ConfigureEndpoints(IBusRegistrationContext context, IRabbitMqBusFactoryConfigurator configurator)
         {
-            // ChatOperation endpoints
-            ConfigureChatOperationEndpoints(context, configurator);
-
             // Saga endpoints
             ConfigureSagaEndpoints(context, configurator);
-        }
-
-        /// <summary>
-        /// Налаштовує endpoint'и для ChatOperation Consumer'ів
-        /// </summary>
-        private static void ConfigureChatOperationEndpoints(IBusRegistrationContext context, IRabbitMqBusFactoryConfigurator configurator)
-        {
-            configurator.ReceiveEndpoint("chat-operation-start", e =>
-            {
-                e.ConfigureConsumer<ChatOperationStartCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15)
-                ));
-            });
-
-            configurator.ReceiveEndpoint("chat-operation-progress", e =>
-            {
-                e.ConfigureConsumer<ChatOperationProgressCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5)
-                ));
-            });
-
-            configurator.ReceiveEndpoint("chat-operation-complete", e =>
-            {
-                e.ConfigureConsumer<ChatOperationCompleteCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15)
-                ));
-            });
-
-            configurator.ReceiveEndpoint("chat-operation-fail", e =>
-            {
-                e.ConfigureConsumer<ChatOperationFailCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5)
-                ));
-            });
-
-            configurator.ReceiveEndpoint("chat-operation-compensate", e =>
-            {
-                e.ConfigureConsumer<ChatOperationCompensateCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15)
-                ));
-            });
         }
 
         /// <summary>
@@ -142,20 +91,9 @@ namespace ChatService.Configuration
         /// </summary>
         private static void ConfigureSagaEndpoints(IBusRegistrationContext context, IRabbitMqBusFactoryConfigurator configurator)
         {
-            configurator.ReceiveEndpoint("create-chat-room", e =>
+            configurator.ReceiveEndpoint("delete-chat-messages", e =>
             {
-                e.ConfigureConsumer<CreateChatRoomCommandConsumer>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15),
-                    TimeSpan.FromSeconds(30)
-                ));
-            });
-
-            configurator.ReceiveEndpoint("notify-message-service", e =>
-            {
-                e.ConfigureConsumer<NotifyMessageServiceCommandConsumer>(context);
+                e.ConfigureConsumer<DeleteChatMessagesCommandConsumer>(context);
                 e.UseMessageRetry(r => r.Intervals(
                     TimeSpan.FromSeconds(1),
                     TimeSpan.FromSeconds(5),
@@ -163,21 +101,60 @@ namespace ChatService.Configuration
                 ));
             });
 
-            configurator.ReceiveEndpoint("compensate-chat-creation", e =>
+            configurator.ReceiveEndpoint("send-chat-notification", e =>
             {
-                e.ConfigureConsumer<CompensateChatCreationCommandConsumer>(context);
+                e.ConfigureConsumer<SendChatNotificationCommandConsumer>(context);
                 e.UseMessageRetry(r => r.Intervals(
                     TimeSpan.FromSeconds(1),
                     TimeSpan.FromSeconds(5)
                 ));
             });
 
-            configurator.ReceiveEndpoint("complete-chat-creation", e =>
+            configurator.ReceiveEndpoint("save-message", e =>
             {
-                e.ConfigureConsumer<CompleteChatCreationCommandConsumer>(context);
+                e.ConfigureConsumer<SaveMessageCommandConsumer>(context);
+                e.UseMessageRetry(r => r.Intervals(
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(15)
+                ));
+            });
+
+            configurator.ReceiveEndpoint("publish-message", e =>
+            {
+                e.ConfigureConsumer<PublishMessageCommandConsumer>(context);
                 e.UseMessageRetry(r => r.Intervals(
                     TimeSpan.FromSeconds(1),
                     TimeSpan.FromSeconds(5)
+                ));
+            });
+
+            configurator.ReceiveEndpoint("check-delivery-status", e =>
+            {
+                e.ConfigureConsumer<CheckDeliveryStatusCommandConsumer>(context);
+                e.UseMessageRetry(r => r.Intervals(
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(15)
+                ));
+            });
+
+            configurator.ReceiveEndpoint("delete-all-messages-saga", e =>
+            {
+                e.ConfigureConsumer<DeleteAllMessagesSagaState>(context);
+                e.UseMessageRetry(r => r.Intervals(
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(15)
+                ));
+            });
+            configurator.ReceiveEndpoint("message-delivery-saga", e =>
+            {
+                e.ConfigureConsumer<MessageDeliverySagaState>(context);
+                e.UseMessageRetry(r => r.Intervals(
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(15)
                 ));
             });
         }

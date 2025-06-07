@@ -1,7 +1,7 @@
 ﻿using ChatService.Services.Interfaces;
 using ChatService.Services;
 using MassTransit;
-using ChatService.Consumers.ChatOperations;
+using ChatService.Sagas.ChatOperation.Consumers;
 
 namespace ChatService.Configuration
 {
