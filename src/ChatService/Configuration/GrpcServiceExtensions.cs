@@ -16,7 +16,7 @@ namespace ChatService.Configuration
         public static IServiceCollection AddGrpcClients(this IServiceCollection services, IConfiguration configuration)
         {
             ConfigureGrpcClient<MessageGrpcService.MessageGrpcServiceClient>(
-        services, configuration["GrpcServices:MessageService"]);
+                services, configuration["GrpcServices:MessageService"]);
 
             // Настройка для IdentityService 
             ConfigureGrpcClient<IdentityGrpcService.IdentityGrpcServiceClient>(

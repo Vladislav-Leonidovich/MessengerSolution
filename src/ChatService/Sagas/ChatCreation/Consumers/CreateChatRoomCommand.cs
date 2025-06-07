@@ -66,7 +66,9 @@ namespace ChatService.Sagas.ChatCreation.Consumers
                     throw new ArgumentException("MemberUserId is required for creating a chat room.", nameof(command.MemberUserId));
                 }
 
-                var chatRoomType = await _chatRoomRepository.GetChatRoomTypeByIdAsync(command.ChatRoomId);
+
+                var chatRoomType = command.MemberUserId.HasValue ? ChatRoomType.privateChat : ChatRoomType.groupChat;
+
                 var chatRoomId = command.ChatRoomId;
 
                 switch (chatRoomType)

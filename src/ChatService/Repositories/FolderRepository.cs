@@ -10,19 +10,18 @@ namespace ChatService.Repositories
     public class FolderRepository : IFolderRepository
     {
         private readonly ChatDbContext _context;
-        private readonly ILogger<FolderRepository> _logger;
 
-        public FolderRepository(ChatDbContext context, ILogger<FolderRepository> logger)
+        public FolderRepository(ChatDbContext context)
         {
             _context = context;
-            _logger = logger;
         }
 
         public async Task<IEnumerable<FolderDto>> GetFoldersForUserAsync(int userId)
         {
             try
             {
-                return await _context.Folders
+                var folders = await _context.Folders
+                    .AsNoTracking()
                     .Where(f => f.UserId == userId)
                     .Select(f => new FolderDto
                     {
@@ -32,11 +31,20 @@ namespace ChatService.Repositories
                     })
                     .OrderBy(f => f.Order)
                     .ToListAsync();
+
+                if (folders == null || !folders.Any())
+                {
+                    throw new EntityNotFoundException("Folders");
+                }
+                return folders;
+            }
+            catch (EntityNotFoundException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні папок для користувача {UserId}", userId);
-                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+                throw new DatabaseException("Помилка при отриманні папок для користувача", ex);
             }
         }
 
@@ -45,11 +53,12 @@ namespace ChatService.Repositories
             try
             {
                 var folder = await _context.Folders
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.Id == folderId);
 
                 if (folder == null)
                 {
-                    return null;
+                    throw new EntityNotFoundException("Folder", folderId);
                 }
 
                 return new FolderDto
@@ -59,10 +68,13 @@ namespace ChatService.Repositories
                     Order = folder.Order
                 };
             }
+            catch (EntityNotFoundException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні папки {FolderId}", folderId);
-                throw new DatabaseException("Помилка при доступі до бази даних", ex);
+                throw new DatabaseException("Помилка при отриманні папки", ex);
             }
         }
 
@@ -85,6 +97,7 @@ namespace ChatService.Repositories
                 if (dto.ChatRoomIds != null && dto.ChatRoomIds.Any())
                 {
                     var chatRooms = await _context.ChatRooms
+                        .AsNoTracking()
                         .Where(cr => dto.ChatRoomIds.Contains(cr.Id))
                         .ToListAsync();
 
@@ -105,8 +118,11 @@ namespace ChatService.Repositories
             }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Помилка бази даних при створенні папки для користувача {UserId}", userId);
                 throw new DatabaseException("Помилка при створенні папки", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Несподівана помилка при створенні папки", ex);
             }
         }
 
@@ -115,11 +131,12 @@ namespace ChatService.Repositories
             try
             {
                 var folder = await _context.Folders
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.Id == folderDto.Id && f.UserId == userId);
 
                 if (folder == null)
                 {
-                    return false;
+                    throw new EntityNotFoundException("Folder", folderDto.Id);
                 }
 
                 folder.Name = folderDto.Name;
@@ -128,10 +145,17 @@ namespace ChatService.Repositories
                 await _context.SaveChangesAsync();
                 return true;
             }
+            catch (EntityNotFoundException)
+            {
+                throw;
+            }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Помилка бази даних при оновленні папки {FolderId}", folderDto.Id);
                 throw new DatabaseException("Помилка при оновленні папки", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Несподівана помилка при оновленні папки", ex);
             }
         }
 
@@ -140,11 +164,12 @@ namespace ChatService.Repositories
             try
             {
                 var folder = await _context.Folders
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.Id == folderId);
 
                 if (folder == null)
                 {
-                    return false;
+                    throw new EntityNotFoundException("Folder", folderId);
                 }
 
                 // Видаляємо папку, а чати залишаються в системі, але без папки
@@ -152,10 +177,17 @@ namespace ChatService.Repositories
                 await _context.SaveChangesAsync();
                 return true;
             }
+            catch (EntityNotFoundException)
+            {
+                throw;
+            }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Помилка бази даних при видаленні папки {FolderId}", folderId);
                 throw new DatabaseException("Помилка при видаленні папки", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Несподівана помилка при видаленні папки", ex);
             }
         }
 
@@ -165,20 +197,22 @@ namespace ChatService.Repositories
             {
                 // Знаходимо чат (приватний або груповий)
                 var chat = await _context.ChatRooms
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(cr => cr.Id == chatId);
 
                 if (chat == null)
                 {
-                    return false;
+                    throw new EntityNotFoundException("ChatRoom", chatId);
                 }
 
                 // Перевіряємо, чи існує папка
                 var folderExists = await _context.Folders
+                    .AsNoTracking()
                     .AnyAsync(f => f.Id == folderId);
 
                 if (!folderExists)
                 {
-                    return false;
+                    throw new EntityNotFoundException("Folder", folderId);
                 }
 
                 // Призначаємо папку
@@ -186,11 +220,17 @@ namespace ChatService.Repositories
                 await _context.SaveChangesAsync();
                 return true;
             }
+            catch (EntityNotFoundException)
+            {
+                throw;
+            }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Помилка бази даних при призначенні чату {ChatId} до папки {FolderId}",
-                    chatId, folderId);
                 throw new DatabaseException("Помилка при призначенні чату до папки", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Несподівана помилка при призначенні чату до папки", ex);
             }
         }
 
@@ -200,11 +240,12 @@ namespace ChatService.Repositories
             {
                 // Знаходимо чат (приватний або груповий)
                 var chat = await _context.ChatRooms
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(cr => cr.Id == chatId);
 
                 if (chat == null || chat.FolderId == null)
                 {
-                    return false;
+                    throw new EntityNotFoundException("ChatRoom", chatId);
                 }
 
                 // Видаляємо призначення папки
@@ -212,22 +253,39 @@ namespace ChatService.Repositories
                 await _context.SaveChangesAsync();
                 return true;
             }
+            catch (EntityNotFoundException)
+            {
+                throw;
+            }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Помилка бази даних при видаленні чату {ChatId} з папки", chatId);
                 throw new DatabaseException("Помилка при видаленні чату з папки", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Несподівана помилка при видаленні чату з папки", ex);
             }
         }
         public async Task<bool> CanAccessFolderAsync(int userId, int folderId)
         {
-            return await _context.Folders
+            try
+            {
+                return await _context.Folders
+                .AsNoTracking()
                 .AnyAsync(f => f.Id == folderId && f.UserId == userId);
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Помилка при перевірці доступу до папки", ex);
+            }
         }
 
         public async Task<bool> IsFolderOwnerAsync(int userId, int folderId)
         {
             var folder = await _context.Folders
+                .AsNoTracking()
                 .FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == userId);
+
             return folder != null;
         }
     }

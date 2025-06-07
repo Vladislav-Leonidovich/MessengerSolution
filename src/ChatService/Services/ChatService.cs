@@ -1,23 +1,12 @@
-﻿using System.Linq;
-using System.Security.Claims;
-using ChatService.Data;
-using ChatService.Models;
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using System.Net.Http;
-using System;
-using MassTransit;
+﻿using MassTransit;
 using Shared.Contracts;
 using ChatService.Authorization;
 using ChatService.Repositories.Interfaces;
 using Shared.Exceptions;
 using ChatService.Services.Interfaces;
-using ChatService.Mappers.Interfaces;
 using Shared.DTOs.Chat;
 using Shared.DTOs.Responses;
 using ChatService.Sagas.ChatCreation.Events;
-using System.Diagnostics.Tracing;
-using System.Text.Json;
 
 namespace ChatService.Services
 {
@@ -43,7 +32,9 @@ namespace ChatService.Services
             _logger = logger;
         }
 
-        public async Task<ApiResponse<dynamic>> GetChatByIdAsync(int chatRoomId, int userId)
+        // Методи для всіх чатів
+
+        public async Task<ApiResponse<object>> GetChatByIdAsync(int chatRoomId, int userId)
         {
             try
             {
@@ -61,7 +52,7 @@ namespace ChatService.Services
                     {
                         throw new EntityNotFoundException("PrivateChat", chatRoomId);
                     }
-                    return ApiResponse<dynamic>.Ok(privateChat);
+                    return ApiResponse<object>.Ok(privateChat);
                 }
                 else
                 {
@@ -70,25 +61,54 @@ namespace ChatService.Services
                     {
                         throw new EntityNotFoundException("GroupChat", chatRoomId);
                     }
-                    return ApiResponse<dynamic>.Ok(groupChat);
+                    return ApiResponse<object>.Ok(groupChat);
                 }
             }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
-                return ApiResponse<dynamic>.Fail(ex.Message);
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючий чат {ChatRoomId}", userId, chatRoomId);
+                return ApiResponse<object>.Fail(ex.Message);
             }
             catch (ForbiddenAccessException ex)
             {
-                _logger.LogWarning(ex.Message);
-                return ApiResponse<dynamic>.Fail(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні чату {ChatId}", chatRoomId);
-                return ApiResponse<dynamic>.Fail("Сталася внутрішня помилка сервера");
+                _logger.LogWarning("Відмовлено в доступі до чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
+                throw;
             }
         }
+
+        public async Task<ApiResponse<bool>> DeleteChatByIdAsync(int chatRoomId, int userId)
+        {
+            try
+            {
+                // Перевірка доступу
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
+
+                // Видалення чату
+                var result = await _chatRoomRepository.DeleteChatAsync(chatRoomId);
+
+                if (result)
+                {
+                    // Публікація події видалення чату
+                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+
+                    return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
+                }
+
+                return ApiResponse<bool>.Fail("Не вдалося видалити чат");
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning("Користувач {UserId} не зміг видалити чат, бо чату {ChatRoomId} не існує", userId, chatRoomId);
+                return ApiResponse<bool>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі видалення чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
+                throw;
+            }
+        }
+
+        // Методи для приватних чатів GET
 
         public async Task<ApiResponse<ChatRoomDto>> GetPrivateChatByIdAsync(int chatRoomId, int userId)
         {
@@ -98,26 +118,17 @@ namespace ChatService.Services
                 await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 var chat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
-                if (chat == null)
-                {
-                    throw new EntityNotFoundException("PrivateChat", chatRoomId);
-                }
 
                 return ApiResponse<ChatRoomDto>.Ok(chat);
             }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючий приватний чат {ChatRoomId}", userId, chatRoomId);
                 return ApiResponse<ChatRoomDto>.Fail(ex.Message);
             }
-            catch (ForbiddenAccessException ex)
+            catch (ForbiddenAccessException)
             {
-                _logger.LogWarning(ex.Message);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні приватного чату {ChatId}", chatRoomId);
+                _logger.LogWarning("Відмовлено в доступі до приватного чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
                 throw;
             }
         }
@@ -129,12 +140,57 @@ namespace ChatService.Services
                 var chats = await _chatRoomRepository.GetPrivateChatsForUserAsync(userId);
                 return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
             }
-            catch (Exception ex)
+            catch (EntityNotFoundException ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні приватних чатів для користувача {UserId}", userId);
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі приватні чати", userId);
+                return ApiResponse<IEnumerable<ChatRoomDto>>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі до приватних чатів користувачу {UserId}", userId);
                 throw;
             }
         }
+
+        public async Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsForFolderAsync(int folderId, int userId)
+        {
+            try
+            {
+                var chats = await _chatRoomRepository.GetPrivateChatsForFolderAsync(folderId);
+                return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі приватні чати, або ж папки {FolderId} не існує", userId, folderId);
+                return ApiResponse<IEnumerable<ChatRoomDto>>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі до приватних чатів з папки {FolderId}, користувачу {UserId}", folderId, userId);
+                throw;
+            }
+        }
+
+        public async Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsWithoutFolderAsync(int userId)
+        {
+            try
+            {
+                var chats = await _chatRoomRepository.GetPrivateChatsWithoutFolderAsync(userId);
+                return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі приватні чати без папки", userId);
+                return ApiResponse<IEnumerable<ChatRoomDto>>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі до приватних чатів без папки, користувачу {UserId}", userId);
+                throw;
+            }
+        }
+
+        // Методи для приватних чатів CREATE
 
         public async Task<ApiResponse<ChatRoomDto>> CreatePrivateChatAsync(CreatePrivateChatRoomDto dto, int userId)
         {
@@ -173,49 +229,19 @@ namespace ChatService.Services
                     return ApiResponse<ChatRoomDto>.Fail(operation.ErrorMessage ?? "Помилка при створенні чату");
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при створенні приватного чату");
-                throw;
-            }
-        }
-
-        public async Task<ApiResponse<bool>> DeleteChatByIdAsync(int chatRoomId, int userId)
-        {
-            try
-            {
-                // Перевірка доступу
-                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
-
-                // Видалення чату
-                var result = await _chatRoomRepository.DeleteChatAsync(chatRoomId);
-
-                if (result)
-                {
-                    // Публікація події видалення чату
-                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
-
-                    return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
-                }
-
-                return ApiResponse<bool>.Fail("Не вдалося видалити чат");
-            }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
-                return ApiResponse<bool>.Fail(ex.Message);
+                _logger.LogWarning("Користувач {UserId} не зміг створити приватний чат", userId);
+                return ApiResponse<ChatRoomDto>.Fail(ex.Message);
             }
-            catch (ForbiddenAccessException ex)
+            catch (ForbiddenAccessException)
             {
-                _logger.LogWarning(ex.Message);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при видаленні приватного чату {ChatId}", chatRoomId);
+                _logger.LogWarning("Відмовлено в доступі створення приватного чату користувачу {UserId}", userId);
                 throw;
             }
         }
+
+        // Методи для приватних чатів DELETE
 
         public async Task<ApiResponse<bool>> DeletePrivateChatByIdAsync(int chatRoomId, int userId)
         {
@@ -235,38 +261,21 @@ namespace ChatService.Services
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
 
-                return ApiResponse<bool>.Fail("Не вдалося видалити чат");
+                return ApiResponse<bool>.Fail("Не вдалося видалити приватний чат");
             }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
+                _logger.LogWarning("Користувач {UserId} не зміг видалити приватний чат, бо чату {ChatRoomId} не існує", userId, chatRoomId);
                 return ApiResponse<bool>.Fail(ex.Message);
             }
-            catch (ForbiddenAccessException ex)
+            catch (ForbiddenAccessException)
             {
-                _logger.LogWarning(ex.Message);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при видаленні приватного чату {ChatId}", chatRoomId);
+                _logger.LogWarning("Відмовлено в доступі видалення приватного чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
                 throw;
             }
         }
 
-        public async Task<bool> IsUserInChatAsync(int userId, int chatRoomId)
-        {
-            try
-            {
-                return await _chatRoomRepository.UserBelongsToChatAsync(userId, chatRoomId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при перевірці участі користувача {UserId} в чаті {ChatId}",
-                    userId, chatRoomId);
-                throw;
-            }
-        }
+        // Методи для групових чатів GET
 
         public async Task<ApiResponse<GroupChatRoomDto>> GetGroupChatByIdAsync(int chatRoomId, int userId)
         {
@@ -283,17 +292,12 @@ namespace ChatService.Services
             }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючий груповий чат {ChatRoomId}", userId, chatRoomId);
                 return ApiResponse<GroupChatRoomDto>.Fail(ex.Message);
             }
-            catch (ForbiddenAccessException ex)
+            catch (ForbiddenAccessException)
             {
-                _logger.LogWarning(ex.Message);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні групового чату {ChatId}", chatRoomId);
+                _logger.LogWarning("Відмовлено в доступі до групового чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
                 throw;
             }
         }
@@ -305,23 +309,14 @@ namespace ChatService.Services
                 var chats = await _chatRoomRepository.GetGroupChatsForUserAsync(userId);
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
-            catch (Exception ex)
+            catch (EntityNotFoundException ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні групових чатів для користувача {UserId}", userId);
-                throw;
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі групові чати", userId);
+                return ApiResponse<IEnumerable<GroupChatRoomDto>>.Fail(ex.Message);
             }
-        }
-
-        public async Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsForFolderAsync(int folderId, int userId)
-        {
-            try
+            catch (ForbiddenAccessException)
             {
-                var chats = await _chatRoomRepository.GetPrivateChatsForFolderAsync(folderId);
-                return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні приватних чатів для папки {FolderId}", folderId);
+                _logger.LogWarning("Відмовлено в доступі до групових чатів користувачу {UserId}", userId);
                 throw;
             }
         }
@@ -333,23 +328,14 @@ namespace ChatService.Services
                 var chats = await _chatRoomRepository.GetGroupChatsForFolderAsync(folderId);
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
-            catch (Exception ex)
+            catch (EntityNotFoundException ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні групових чатів для папки {FolderId}", folderId);
-                throw;
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі групові чати, або ж папки {FolderId} не існує", userId, folderId);
+                return ApiResponse<IEnumerable<GroupChatRoomDto>>.Fail(ex.Message);
             }
-        }
-
-        public async Task<ApiResponse<IEnumerable<ChatRoomDto>>> GetPrivateChatsWithoutFolderAsync(int userId)
-        {
-            try
+            catch (ForbiddenAccessException)
             {
-                var chats = await _chatRoomRepository.GetPrivateChatsWithoutFolderAsync(userId);
-                return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні приватних чатів без папки для користувача {UserId}", userId);
+                _logger.LogWarning("Відмовлено в доступі до групових чатів з папки {FolderId}, користувачу {UserId}", folderId, userId);
                 throw;
             }
         }
@@ -361,13 +347,19 @@ namespace ChatService.Services
                 var chats = await _chatRoomRepository.GetGroupChatsWithoutFolderAsync(userId);
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
-            catch (Exception ex)
+            catch (EntityNotFoundException ex)
             {
-                _logger.LogError(ex, "Помилка при отриманні групових чатів без папки для користувача {UserId}", userId);
+                _logger.LogWarning("Користувач {UserId} запросив неіснуючі групові чати без папки", userId);
+                return ApiResponse<IEnumerable<GroupChatRoomDto>>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі до групових чатів без папки, користувачу {UserId}", userId);
                 throw;
             }
         }
 
+        // Методи для групових чатів CREATE
         public async Task<ApiResponse<GroupChatRoomDto>> CreateGroupChatAsync(CreateGroupChatRoomDto dto, int userId)
         {
             try
@@ -407,13 +399,19 @@ namespace ChatService.Services
                     return ApiResponse<GroupChatRoomDto>.Fail(operation.ErrorMessage ?? "Помилка при створенні чату");
                 }
             }
-            catch (Exception ex)
+            catch (EntityNotFoundException ex)
             {
-                _logger.LogError(ex, "Помилка при створенні групового чату");
+                _logger.LogWarning("Користувач {UserId} не зміг створити груповий чат", userId);
+                return ApiResponse<GroupChatRoomDto>.Fail(ex.Message);
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі створення групового чату користувачу {UserId}", userId);
                 throw;
             }
         }
 
+        // Методи для групових чатів DELETE
         public async Task<ApiResponse<bool>> DeleteGroupChatByIdAsync(int chatRoomId, int userId)
         {
             try
@@ -432,17 +430,32 @@ namespace ChatService.Services
             }
             catch (EntityNotFoundException ex)
             {
-                _logger.LogWarning(ex.Message);
+                _logger.LogWarning("Користувач {UserId} не зміг видалити груповий чат {ChatRoomId}", userId, chatRoomId);
                 return ApiResponse<bool>.Fail(ex.Message);
             }
-            catch (ForbiddenAccessException ex)
+            catch (ForbiddenAccessException)
             {
-                _logger.LogWarning(ex.Message);
+                _logger.LogWarning("Відмовлено в доступі видалення групового чату {ChatRoomId} користувачу {UserId}", chatRoomId, userId);
                 throw;
             }
-            catch (Exception ex)
+        }
+
+        // Інше
+
+        public async Task<bool> IsUserInChatAsync(int userId, int chatRoomId)
+        {
+            try
             {
-                _logger.LogError(ex, "Помилка при видаленні групового чату {ChatId}", chatRoomId);
+                return await _chatRoomRepository.UserBelongsToChatAsync(userId, chatRoomId);
+            }
+            catch (EntityNotFoundException)
+            {
+                _logger.LogWarning("Користувач {UserId} не належить до чату, бо чату {ChatRoomId} не існує", userId, chatRoomId);
+                return false;
+            }
+            catch (ForbiddenAccessException)
+            {
+                _logger.LogWarning("Відмовлено в доступі для перевірки чи належить користувач {UserId} до чату {ChatRoomId}", userId, chatRoomId);
                 throw;
             }
         }
