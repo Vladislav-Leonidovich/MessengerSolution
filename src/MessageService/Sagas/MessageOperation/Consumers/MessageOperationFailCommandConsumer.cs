@@ -35,6 +35,4 @@ namespace MessageService.Sagas.MessageOperation.Consumers
             }
         }
     }
-    {
-    }
 }

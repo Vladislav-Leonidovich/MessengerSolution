@@ -43,8 +43,17 @@ namespace MessageService.Sagas.MessageDelivery
                         context.Saga.ChatRoomId = context.Message.ChatRoomId;
                         context.Saga.SenderUserId = context.Message.SenderUserId;
                         context.Saga.CreatedAt = DateTime.UtcNow;
+
+                        context.Saga.DeliveredToUserIds ??= new List<int>();
+
+                        // Скидаємо стан помилки при перезапуску
+                        context.Saga.ErrorMessage = string.Empty;
+                        context.Saga.IsSaved = false;
+                        context.Saga.IsPublished = false;
+                        context.Saga.IsDelivered = false;
+                        context.Saga.IsDeliveredAfterTimeout = false;
                     })
-                    .PublishAsync(context => context.Init<MessageOperationStartCommand>(new
+                    .SendAsync(context => context.Init<MessageOperationStartCommand>(new
                     {
                         CorrelationId = context.Message.CorrelationId,
                         OperationType = MessageOperationType.SendMessage,
@@ -57,7 +66,7 @@ namespace MessageService.Sagas.MessageDelivery
                             Content = context.Message.Content
                         }
                     }))
-                    .PublishAsync(context => context.Init<SaveMessageCommand>(new
+                    .SendAsync(context => context.Init<SaveMessageCommand>(new
                     {
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Message.MessageId,
@@ -86,14 +95,14 @@ namespace MessageService.Sagas.MessageDelivery
                             StatusMessage = "Повідомлення створено"
                         });
                     })
-                    .Publish(context => new PublishMessageCommand
+                    .SendAsync(context => context.Init <PublishMessageCommand>(new
                     {
                         CorrelationId = context.Message.CorrelationId,
                         MessageId = context.Message.MessageId,
                         ChatRoomId = context.Saga.ChatRoomId,
                         SenderUserId = context.Saga.SenderUserId,
                         Content = context.Message.EncryptedContent
-                    })
+                    }))
                     .TransitionTo(PublishingMessage),
 
                 When(MessageDeliveryFailed)
@@ -125,6 +134,12 @@ namespace MessageService.Sagas.MessageDelivery
 
                         context.Saga.IsPublished = true;
                     })
+                    .PublishAsync(context => context.Init<MessageOperationProgressEvent>(new
+                    {
+                        CorrelationId = context.Message.CorrelationId,
+                        Progress = 75,
+                        StatusMessage = "Повідомлення опубліковано, очікується доставка"
+                    }))
                     .Schedule(DeliveryTimeoutExpired,
                         context => new MessageDeliveryTimeoutEvent
                         {
@@ -158,6 +173,7 @@ namespace MessageService.Sagas.MessageDelivery
                 When(MessageDeliveredToUser)
                     .Then(context =>
                     {
+                        context.Saga.DeliveredToUserIds ??= new List<int>();
                         // Додати користувача до списку тих, кому доставлено
                         if (!context.Saga.DeliveredToUserIds.Contains(context.Message.UserId))
                         {
@@ -168,19 +184,12 @@ namespace MessageService.Sagas.MessageDelivery
                                 context.Saga.MessageId, context.Message.UserId, context.Saga.DeliveredToUserIds.Count);
                         }
                     })
-                    .ThenAsync(async context =>
+                    .Send(context => new CheckDeliveryStatusCommand
                     {
-                        // Відкладене відправлення CheckDeliveryStatusCommand для зменшення навантаження
-                        // Чекаємо 200мс перед перевіркою, щоб накопичити більше підтверджень
-                        await Task.Delay(200);
-
-                        await context.Publish(new CheckDeliveryStatusCommand
-                        {
-                            CorrelationId = context.Message.CorrelationId,
-                            MessageId = context.Saga.MessageId,
-                            ChatRoomId = context.Saga.ChatRoomId,
-                            SenderUserId = context.Saga.SenderUserId
-                        });
+                        CorrelationId = context.Message.CorrelationId,
+                        MessageId = context.Saga.MessageId,
+                        ChatRoomId = context.Saga.ChatRoomId,
+                        SenderUserId = context.Saga.SenderUserId
                     }),
 
                 When(DeliveryStatusChecked)
@@ -208,6 +217,7 @@ namespace MessageService.Sagas.MessageDelivery
                     ),
 
                When(DeliveryTimeoutExpired.Received)
+                    .Unschedule(DeliveryTimeoutExpired)
                     .Then(context =>
                     {
                         logger.LogWarning("Таймаут доставки повідомлення {MessageId}. " +
@@ -216,24 +226,24 @@ namespace MessageService.Sagas.MessageDelivery
 
                         // Помічаємо, що час вийшов, але сага завершується успішно
                         context.Saga.IsDeliveredAfterTimeout = true;
+                        context.Saga.IsDelivered = true;
                     })
                     .TransitionTo(Completed),
 
                 When(MessageDeliveryFailed)
+                    .Unschedule(DeliveryTimeoutExpired)
                     .Then(context =>
                     {
                         logger.LogError("Помилка доставки повідомлення {MessageId}: {ErrorMessage}",
                             context.Saga.MessageId, context.Message.Reason);
 
                         context.Saga.ErrorMessage = context.Message.Reason;
-
-                        // Позначаємо операцію як невдалу
-                        context.Publish(new MessageOperationFailCommand
-                        {
-                            CorrelationId = context.Saga.CorrelationId,
-                            ErrorMessage = context.Message.Reason,
-                            ErrorCode = "OPERATION_TIMEOUT"
-                        });
+                    })
+                    .Publish(context => new MessageOperationFailedEvent
+                    {
+                        CorrelationId = context.Saga.CorrelationId,
+                        ErrorMessage = context.Message.Reason,
+                        ErrorCode = "MESSAGE_DELIVERY_FAILED"
                     })
                     .TransitionTo(Failed)
             );
@@ -252,6 +262,19 @@ namespace MessageService.Sagas.MessageDelivery
                 logger.LogError("Сага доставки повідомлення {MessageId} завершена з помилкою: {ErrorMessage}",
                     context.Saga.MessageId, context.Saga.ErrorMessage);
             }));
+
+            During(Completed,
+                Ignore(MessageDeliveredToUser),
+                Ignore(DeliveryStatusChecked),
+                Ignore(MessageDeliveryFailed)
+            );
+
+            During(Failed,
+                Ignore(MessageDeliveredToUser),
+                Ignore(DeliveryStatusChecked),
+                Ignore(MessageSaved),
+                Ignore(MessagePublished)
+            );
 
             // Автоматичне завершення саги
             SetCompletedWhenFinalized();
