@@ -1,22 +1,25 @@
 ﻿using MessageService.Data;
+using MessageService.Services;
+using MessageService.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Shared.Exceptions;
+using Shared.Protos;
 
 namespace MessageService.Authorization
 {
     public class MessageAuthorizationService : IMessageAuthorizationService
     {
         private readonly MessageDbContext _context;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IChatGrpcClient _chatGrpcClient;
         private readonly ILogger<MessageAuthorizationService> _logger;
 
         public MessageAuthorizationService(
             MessageDbContext context,
-            IHttpClientFactory httpClientFactory,
+            IChatGrpcClient chatGrpcClient,
             ILogger<MessageAuthorizationService> logger)
         {
             _context = context;
-            _httpClientFactory = httpClientFactory;
+            _chatGrpcClient = chatGrpcClient;
             _logger = logger;
         }
 
@@ -45,10 +48,8 @@ namespace MessageService.Authorization
         {
             try
             {
-                var chatClient = _httpClientFactory.CreateClient("ChatClient");
-                var response = await chatClient.GetAsync($"api/chat/get-auth-user-in-chat/{chatRoomId}");
-
-                return response.IsSuccessStatusCode;
+                var response = await _chatGrpcClient.CheckAccessAsync(userId, chatRoomId);
+                return response;
             }
             catch (Exception ex)
             {

@@ -8,7 +8,7 @@ namespace MessageService.Services.Interfaces
     public interface IMessageService
     {
         // Зберігає повідомлення, передане клієнтом
-        Task<ApiResponse<MessageDto>> SendMessageViaSagaAsync(SendMessageDto model, int userId);
+        Task<ApiResponse<Task>> SendMessageViaSagaAsync(SendMessageDto model, int userId);
 
         // Отримує список повідомлень для зазначеного чату з підтримкою пагінації
         Task<ApiResponse<IEnumerable<MessageDto>>> GetMessagesAsync(int chatRoomId, int userId, int startIndex, int count);

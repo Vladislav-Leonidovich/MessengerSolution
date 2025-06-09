@@ -13,6 +13,15 @@ namespace Shared.DTOs.Responses
         public T? Data { get; set; }
         public List<string> Errors { get; set; } = new List<string>();
 
+
+        public static ApiResponse<T> Ok(string message = "")
+        {
+            return new ApiResponse<T>
+            {
+                Success = true,
+                Message = message
+            };
+        }
         public static ApiResponse<T> Ok(T data, string message = "")
         {
             return new ApiResponse<T>

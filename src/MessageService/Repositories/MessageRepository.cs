@@ -149,7 +149,7 @@ namespace MessageService.Repositories
                 if (existingMessage != null)
                 {
                     // Повертаємо існуюче повідомлення
-                    string decryptedContent;
+                    /*string decryptedContent;
                     try
                     {
                         decryptedContent = await _encryptionClient.DecryptAsync(existingMessage.Content);
@@ -157,16 +157,16 @@ namespace MessageService.Repositories
                     catch (ServiceUnavailableException)
                     {
                         decryptedContent = "Повідомлення недоступне для відображення";
-                    }
+                    }*/
 
                     await transaction.CommitAsync();
 
-                    return new MessageDto
+                    return new MessageDto()
                     {
                         Id = existingMessage.Id,
                         ChatRoomId = existingMessage.ChatRoomId,
                         SenderUserId = existingMessage.SenderUserId,
-                        Content = decryptedContent,
+                        Content = existingMessage.Content,
                         CreatedAt = existingMessage.CreatedAt,
                         IsRead = existingMessage.IsRead,
                         ReadAt = existingMessage.ReadAt,
@@ -219,18 +219,17 @@ namespace MessageService.Repositories
                 // 5. Фіксуємо транзакцію
                 await transaction.CommitAsync();
 
-                // 6. Повертаємо DTO з нешифрованим вмістом для відображення клієнту
-                return new MessageDto
+                return new MessageDto()
                 {
-                    Id = message.Id,
-                    ChatRoomId = message.ChatRoomId,
-                    SenderUserId = message.SenderUserId,
-                    Content = model.Content, // Оригінальний текст
-                    CreatedAt = message.CreatedAt,
-                    IsRead = message.IsRead,
-                    ReadAt = message.ReadAt,
-                    IsEdited = message.IsEdited,
-                    EditedAt = message.EditedAt
+                    Id = existingMessage.Id,
+                    ChatRoomId = existingMessage.ChatRoomId,
+                    SenderUserId = existingMessage.SenderUserId,
+                    Content = encryptedContent,
+                    CreatedAt = existingMessage.CreatedAt,
+                    IsRead = existingMessage.IsRead,
+                    ReadAt = existingMessage.ReadAt,
+                    IsEdited = existingMessage.IsEdited,
+                    EditedAt = existingMessage.EditedAt
                 };
             }
             catch (DbUpdateException ex)

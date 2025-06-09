@@ -111,4 +111,48 @@ namespace MessageService.Sagas.MessageDelivery.Events
         public bool TimedOut { get; set; }
         public DateTime CompletedAt { get; set; } = DateTime.UtcNow;
     }
+
+    // Команда компенсації збереження повідомлення
+    public class CompensateMessageSavingCommand
+    {
+        public Guid CorrelationId { get; set; }
+        public int MessageId { get; set; }
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    // Подія успішної компенсації збереження
+    public class MessageSavingCompensatedEvent
+    {
+        public Guid CorrelationId { get; set; }
+        public int MessageId { get; set; }
+    }
+
+    // Команда компенсації публікації повідомлення
+    public class CompensateMessagePublishingCommand
+    {
+        public Guid CorrelationId { get; set; }
+        public int MessageId { get; set; }
+        public int ChatRoomId { get; set; }
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    // Подія успішної компенсації публікації
+    public class MessagePublishingCompensatedEvent
+    {
+        public Guid CorrelationId { get; set; }
+        public int MessageId { get; set; }
+    }
+
+    // Подія помилки компенсації
+    public class CompensationFailedEvent
+    {
+        public Guid CorrelationId { get; set; }
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    // Подія таймауту компенсації
+    public class CompensationTimeoutExpiredEvent
+    {
+        public Guid CorrelationId { get; set; }
+    }
 }

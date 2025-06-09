@@ -39,7 +39,7 @@ namespace MessageService.Services
         }
         
         // Надсилає повідомлення з використанням саги для забезпечення надійної доставки
-        public async Task<ApiResponse<MessageDto>> SendMessageViaSagaAsync(SendMessageDto model, int userId)
+        public async Task<ApiResponse<Task>> SendMessageViaSagaAsync(SendMessageDto model, int userId)
         {
             try
             {
@@ -49,40 +49,37 @@ namespace MessageService.Services
                 // Запускаємо сагу для обробки надсилання повідомлення
                 var correlationId = Guid.NewGuid();
 
-                // Створюємо тимчасове повідомлення та отримуємо його ID через репозиторій
-                var tempMessageDto = await _messageRepository.CreateMessageForSagaAsync(model, userId, correlationId);
-
                 // Публікуємо подію початку відправки повідомлення через RabbitMQ
                 await _eventPublisher.PublishAsync(new MessageDeliveryStartedEvent
                 {
                     CorrelationId = correlationId,
-                    MessageId = tempMessageDto.Id,
+                    MessageId = -1,
                     ChatRoomId = model.ChatRoomId,
                     SenderUserId = userId,
                     Content = model.Content
                 });
 
-                return ApiResponse<MessageDto>.Ok(tempMessageDto, "Повідомлення відправлено і буде доставлено отримувачам");
+                return ApiResponse<Task>.Ok("Повідомлення відправлено і буде доставлено отримувачам");
             }
             catch (EntityNotFoundException ex)
             {
                 _logger.LogWarning(ex.Message);
-                return ApiResponse<MessageDto>.Fail(ex.Message);
+                return ApiResponse<Task>.Fail(ex.Message);
             }
             catch (DatabaseException ex)
             {
                 _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
-                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
+                return ApiResponse<Task>.Fail("Помилка при роботі з базою даних");
             }
             catch (ForbiddenAccessException ex)
             {
                 _logger.LogWarning(ex.Message);
-                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
+                return ApiResponse<Task>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
-                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
+                return ApiResponse<Task>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 

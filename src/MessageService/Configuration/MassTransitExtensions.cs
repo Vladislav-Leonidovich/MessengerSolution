@@ -138,25 +138,6 @@ namespace MessageService.Configuration
                     TimeSpan.FromSeconds(15)
                 ));
             });
-
-            configurator.ReceiveEndpoint("delete-all-messages-saga", e =>
-            {
-                e.ConfigureConsumer<DeleteAllMessagesSagaState>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15)
-                ));
-            });
-            configurator.ReceiveEndpoint("message-delivery-saga", e =>
-            {
-                e.ConfigureConsumer<MessageDeliverySagaState>(context);
-                e.UseMessageRetry(r => r.Intervals(
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(15)
-                ));
-            });
         }
     }
 }

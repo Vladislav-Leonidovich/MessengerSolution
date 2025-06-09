@@ -16,10 +16,10 @@ namespace MessageService.Configuration
         public static IServiceCollection AddGrpcClients(this IServiceCollection services, IConfiguration configuration)
         {
             ConfigureGrpcClient<ChatGrpcService.ChatGrpcServiceClient>(
-                services, configuration["GrpcServices:ChatService"]);
+                services, configuration["GrpcServices:ChatGrpcService"]);
 
             ConfigureGrpcClient<EncryptionGrpcService.EncryptionGrpcServiceClient>(
-                services, configuration["GrpcServices:EncryptionService"]);
+                services, configuration["GrpcServices:EncryptionGrpcService"]);
 
             return services;
         }

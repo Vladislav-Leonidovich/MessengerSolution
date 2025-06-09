@@ -28,7 +28,7 @@ namespace MessageService.Services
             _logger = logger;
 
             // Настройка канала gRPC
-            var encryptionServiceUrl = configuration["Services:EncryptionService:GrpcUrl"];
+            var encryptionServiceUrl = configuration["GrpcServices:EncryptionGrpcService"];
             _channel = GrpcChannel.ForAddress(encryptionServiceUrl, new GrpcChannelOptions
             {
                 HttpHandler = new SocketsHttpHandler

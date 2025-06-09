@@ -42,7 +42,6 @@ namespace MessageService.Sagas.MessageDelivery
                         context.Saga.MessageId = context.Message.MessageId;
                         context.Saga.ChatRoomId = context.Message.ChatRoomId;
                         context.Saga.SenderUserId = context.Message.SenderUserId;
-                        context.Saga.CreatedAt = DateTime.UtcNow;
 
                         context.Saga.DeliveredToUserIds ??= new List<int>();
 
@@ -74,6 +73,12 @@ namespace MessageService.Sagas.MessageDelivery
                         SenderUserId = context.Message.SenderUserId,
                         Content = context.Message.Content
                     }))
+                    .PublishAsync(context => context.Init<MessageOperationProgressCommand>(new
+                    {
+                        CorrelationId = context.Message.CorrelationId,
+                        Progress = 10,
+                        Status = "Розпочато процес доставки повідомлення"
+                    }))
                     .TransitionTo(SavingMessage)
             );
 
@@ -86,15 +91,13 @@ namespace MessageService.Sagas.MessageDelivery
 
                         context.Saga.IsSaved = true;
                         context.Saga.EncryptedContent = context.Message.EncryptedContent;
-
-                        // Оновлюємо прогрес операції
-                        context.Publish(new MessageOperationProgressCommand
-                        {
-                            CorrelationId = context.Message.CorrelationId,
-                            Progress = 50,
-                            StatusMessage = "Повідомлення створено"
-                        });
                     })
+                    .SendAsync(context => context.Init<MessageOperationProgressCommand>(new
+                    {
+                        CorrelationId = context.Message.CorrelationId,
+                        Progress = 10,
+                        Status = "Розпочато процес доставки повідомлення"
+                    }))
                     .SendAsync(context => context.Init <PublishMessageCommand>(new
                     {
                         CorrelationId = context.Message.CorrelationId,

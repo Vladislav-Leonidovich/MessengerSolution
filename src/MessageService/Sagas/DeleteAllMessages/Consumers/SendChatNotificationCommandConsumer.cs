@@ -69,7 +69,7 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
                     .SendAsync("ChatMessagesDeleted", notification);
 
                 // Додатково можна надіслати індивідуальні сповіщення
-                foreach (var userId in participants)
+                /*foreach (var userId in participants)
                 {
                     try
                     {
@@ -88,7 +88,7 @@ namespace MessageService.Sagas.DeleteAllMessages.Consumers
                             userId);
                         // Продовжуємо з іншими користувачами
                     }
-                }
+                }*/
 
                 _logger.LogInformation("Сповіщення надіслано {Count} учасникам чату {ChatRoomId}",
                     participants.Count, command.ChatRoomId);

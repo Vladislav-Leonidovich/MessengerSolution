@@ -20,7 +20,7 @@ namespace MessageService.Services
             _logger = logger;
 
             // Настройка канала
-            var chatServiceUrl = config["Services:ChatService:GrpcUrl"];
+            var chatServiceUrl = config["GrpcServices:ChatGrpcService"];
             _channel = GrpcChannel.ForAddress(chatServiceUrl, new GrpcChannelOptions
             {
                 HttpHandler = new SocketsHttpHandler

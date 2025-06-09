@@ -40,7 +40,6 @@
 		<Folder Include="DTOs\Responses\" />
 		<Folder Include="Authorization\" />
 		<Folder Include="Contracts\" />
-		<Folder Include="Exceptions\" />
 		<Folder Include="Consumers\" />
 		<Folder Include="Protos\" />
 	</ItemGroup>

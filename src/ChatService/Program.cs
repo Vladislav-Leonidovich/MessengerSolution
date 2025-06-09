@@ -101,6 +101,10 @@ try
     // gRPC сервіси з interceptor'ом
     app.MapGrpcService<ChatGrpcService>()
         .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
+    app.MapGrpcService<MessageGrpcService>()
+        .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
+    app.MapGrpcService<IdentityGrpcService>()
+        .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
 
     // Health check endpoint
     app.MapGet("/health", () => Results.Ok(new
