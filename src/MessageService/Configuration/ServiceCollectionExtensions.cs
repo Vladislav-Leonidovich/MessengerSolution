@@ -31,7 +31,6 @@ namespace MessageService.Configuration
         {
             // Основні бізнес-сервіси
             services.AddScoped<IMessageService, MessageService.Services.MessageService>();
-            services.AddScoped<IEventPublisher, OutboxEventPublisher>();
 
             // gRPC сервіси
             services.AddScoped<MessageGrpcService>();
@@ -70,9 +69,9 @@ namespace MessageService.Configuration
             {
                 options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
                 {
-                    Title = "Chat Service API",
+                    Title = "Message Service API",
                     Version = "v1",
-                    Description = "API для управління чатами та папками"
+                    Description = "API для управління повідомленнями"
                 });
 
                 // Налаштування для JWT авторизації в Swagger

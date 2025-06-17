@@ -23,14 +23,14 @@ namespace MessageService.Controllers
             _httpContextAccessor = httpContextAccessor;
         }
 
-        // POST: api/message/send
+        // POST: api/message/send/{chatRoomId}
         // Створює нове повідомлення
-        [HttpPost("send")]
+        [HttpPost("send/{chatRoomId}")]
         [RequirePermission(MessagePermission.SendMessage)] // Використовуємо атрибут для перевірки доступу
-        public async Task<IActionResult> SendMessage([FromBody] SendMessageDto model)
+        public async Task<IActionResult> SendMessage([FromBody] string content, int chatRoomId)
         {
             var userId = GetCurrentUserId();
-            var response = await _messageService.SendMessageViaSagaAsync(model, userId);
+            var response = await _messageService.SendMessageAsync(content, userId, chatRoomId);
             // Повертаємо відповідь із даними створеного повідомлення
             return Ok(response);
         }

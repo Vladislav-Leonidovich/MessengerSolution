@@ -1,4 +1,5 @@
-﻿using ChatService.Models;
+﻿using System.Security.Claims;
+using ChatService.Models;
 using ChatService.Repositories;
 using ChatService.Repositories.Interfaces;
 using ChatService.Services.Interfaces;
@@ -10,16 +11,16 @@ namespace ChatService.Mappers
 {
     public class PrivateChatRoomMapper : BaseEntityMapper<PrivateChatRoom, ChatRoomDto>
     {
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IChatRoomRepository _chatRoomRepository;
         private readonly ILogger<PrivateChatRoomMapper> _logger;
 
         public PrivateChatRoomMapper(
-            IHttpClientFactory httpClientFactory,
+            IHttpContextAccessor httpContextAccessor,
             IChatRoomRepository chatRepository,
             ILogger<PrivateChatRoomMapper> logger)
         {
-            _httpClientFactory = httpClientFactory;
+            _httpContextAccessor = httpContextAccessor;
             _chatRoomRepository = chatRepository;
             _logger = logger;
         }
@@ -38,7 +39,7 @@ namespace ChatService.Mappers
                 {
                     Id = entity.Id,
                     CreatedAt = entity.CreatedAt,
-                    Name = GetChatNameAsync(entity, userId).GetAwaiter().GetResult(),
+                    Name = _chatRoomRepository.GetChatNameAsync(entity.Id, GetCurrentUserId()).GetAwaiter().GetResult(),
                     ChatRoomType = entity.ChatRoomType,
                     ParticipantIds = entity.UserChatRooms?.Select(ucr => ucr.UserId) ?? new List<int>(),
                     LastMessagePreview = _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id).GetAwaiter().GetResult()
@@ -65,7 +66,7 @@ namespace ChatService.Mappers
                 {
                     Id = entity.Id,
                     CreatedAt = entity.CreatedAt,
-                    Name = await GetChatNameAsync(entity, userId),
+                    Name = await _chatRoomRepository.GetChatNameAsync(entity.Id, GetCurrentUserId()),
                     ChatRoomType = entity.ChatRoomType,
                     ParticipantIds = entity.UserChatRooms?.Select(ucr => ucr.UserId) ?? new List<int>(),
                     LastMessagePreview = await _chatRoomRepository.GetLastMessagePreviewAsync(entity.Id)
@@ -184,36 +185,14 @@ namespace ChatService.Mappers
             }
         }
 
-        // Допоміжні методи
-        private async Task<string> GetChatNameAsync(PrivateChatRoom chat, int? currentUserId)
+        private int GetCurrentUserId()
         {
-            try
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
-                // Для приватного чату назва - це ім'я співрозмовника
-                var partnerId = chat.UserChatRooms?
-                    .FirstOrDefault(ucr => !currentUserId.HasValue || ucr.UserId != currentUserId.Value)?.UserId;
-
-                if (!partnerId.HasValue)
-                {
-                    return "Приватний чат";
-                }
-
-                var identityClient = _httpClientFactory.CreateClient("IdentityClient");
-                var response = await identityClient.GetAsync($"api/users/search/id/{partnerId.Value}");
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var userDto = await response.Content.ReadFromJsonAsync<UserDto>();
-                    return userDto?.DisplayName ?? $"Користувач {partnerId.Value}";
-                }
-
-                return $"Користувач {partnerId.Value}";
+                throw new UnauthorizedAccessException("Користувача не знайдено в токені.");
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка при отриманні імені користувача");
-                return "Приватний чат";
-            }
+            return userId;
         }
     }
 }

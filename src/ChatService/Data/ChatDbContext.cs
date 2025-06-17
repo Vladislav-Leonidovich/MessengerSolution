@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ChatService.Models;
 using Shared.Contracts;
+using Shared.Outbox;
+using Microsoft.EntityFrameworkCore.ValueGeneration;
 
 namespace ChatService.Data
 {
@@ -58,6 +60,9 @@ namespace ChatService.Data
             modelBuilder.Entity<Folder>()
                 .Property(f => f.UserId)
                 .IsRequired();
+
+            modelBuilder.Entity<Shared.Outbox.OutboxMessage>()
+        .Property(x => x.NextRetryAt);
 
             // Конфігурація для ProcessedEvent
             modelBuilder.Entity<ProcessedEvent>()

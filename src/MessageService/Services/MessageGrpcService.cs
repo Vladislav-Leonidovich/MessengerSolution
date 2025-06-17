@@ -79,6 +79,17 @@ namespace MessageService.Services
                     };
                 }
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Користувач не авторизований при отриманні останнього повідомлення для чату {ChatRoomId}",
+                    request.ChatRoomId);
+                return new ApiResponse
+                {
+                    Success = false,
+                    Data = null,
+                    ErrorMessage = "Користувач не авторизований"
+                };
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка при отриманні останнього повідомлення для чату {ChatRoomId}",
@@ -93,63 +104,90 @@ namespace MessageService.Services
             }
         }
 
+        public override async Task<LastMessagesBatchResponse> GetLastMessagesBatch(LastMessagesBatchRequest request, ServerCallContext context)
+        {
+            try
+            {
+                // Отримання ID користувача з контексту або використання системного ID
+                int userId = GetUserIdFromContext(context);
+                if (userId == -1)
+                {
+                    return new LastMessagesBatchResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "Користувач не авторизований"
+                    };
+                }
+                // Виклик сервісу для отримання останніх повідомлень
+                var response = await _messageService.GetLastMessagesBatchAsync(request.ChatRoomIds, userId);
+                if (response.Success && response.Data != null)
+                {
+                    _logger.LogInformation("Отримано пакет останніх повідомлень для чатів {ChatRoomIds}", string.Join(", ", request.ChatRoomIds));
+
+                    var messages = response.Data.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new MessageData
+                        {
+                            Id = kvp.Value.Id,
+                            ChatRoomId = kvp.Value.ChatRoomId,
+                            SenderUserId = kvp.Value.SenderUserId,
+                            Content = kvp.Value.Content,
+                            CreatedAt = Timestamp.FromDateTime(kvp.Value.CreatedAt.ToUniversalTime()),
+                            IsRead = kvp.Value.IsRead,
+                            IsEdited = kvp.Value.IsEdited
+                        });
+                    return new LastMessagesBatchResponse
+                    {
+                        Success = true,
+                        Messages = { messages }
+                    };
+                }
+                else
+                {
+                    return new LastMessagesBatchResponse
+                    {
+                        Success = false,
+                        ErrorMessage = response.Message
+                    };
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Користувач не авторизований при отриманні пакету останніх повідомлень");
+                return new LastMessagesBatchResponse
+                {
+                    Success = false,
+                    ErrorMessage = "Користувач не авторизований"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні пакету останніх повідомлень");
+                return new LastMessagesBatchResponse
+                {
+                    Success = false,
+                    ErrorMessage = "Сталася помилка при отриманні пакету останніх повідомлень"
+                };
+            }
+        }
+
         // Допоміжний метод для отримання ID користувача з контексту gRPC
         private int GetUserIdFromContext(ServerCallContext context)
         {
             try
             {
-                // Отримуємо Authorization хедер
-                var authHeader = context.RequestHeaders.FirstOrDefault(h => h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))?.Value;
+                var httpContext = context.GetHttpContext();
 
-                if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                if (httpContext.User.Identity?.IsAuthenticated != true)
                 {
-                    _logger.LogWarning("JWT токен відсутній або має неправильний формат");
-                    return -1;
+                    throw new UnauthorizedAccessException("Користувач не авторизований");
                 }
 
-                // Вилучаємо JWT токен з Bearer префіксу
-                var token = authHeader.Substring("Bearer ".Length).Trim();
+                var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
 
-                if (string.IsNullOrEmpty(token))
-                {
-                    _logger.LogWarning("JWT токен порожній після обрізання префіксу");
-                    return -1;
-                }
-
-                // Декодуємо JWT токен
-                var handler = new JwtSecurityTokenHandler();
-
-                if (!handler.CanReadToken(token))
-                {
-                    _logger.LogWarning("Неможливо розпізнати JWT токен");
-                    return -1;
-                }
-
-                var jwtToken = handler.ReadJwtToken(token);
-
-                // Шукаємо claim з ID користувача
-                var userIdClaim = jwtToken.Claims.FirstOrDefault(c =>
-                    c.Type == ClaimTypes.NameIdentifier ||
-                    c.Type == "sub" ||
-                    c.Type == "userId");
-
-                if (userIdClaim == null)
-                {
-                    _logger.LogWarning("Claim з ID користувача не знайдено в JWT токені");
-                    return -1;
-                }
-
-                // Конвертуємо ID користувача в int
-                if (int.TryParse(userIdClaim.Value, out int userId))
-                {
-                    _logger.LogDebug("Успішно отримано ID користувача {UserId} з JWT токену", userId);
-                    return userId;
-                }
-                else
-                {
-                    _logger.LogWarning("Неможливо конвертувати ID користувача '{RawUserId}' в число", userIdClaim.Value);
-                    return -1;
-                }
+                return userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId)
+                    ? userId
+                    : -1; // Повертаємо -1, якщо ID користувача не знайдено або не є числом
             }
             catch (Exception ex)
             {

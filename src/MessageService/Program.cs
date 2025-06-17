@@ -4,6 +4,9 @@ using Shared.Interceptors;
 using Shared.Protos;
 using MessageService.Configuration;
 using MessageService.Hubs;
+using MessageService.Data;
+using MessageService.BackgroundServices;
+using Shared.Outbox;
 
 var builder = WebApplication.CreateBuilder(args);
 try
@@ -33,26 +36,22 @@ try
 
     // Реєстрація сервісів авторизації
     builder.Services.AddAuthorizationServices();
-
     // gRPC клієнти
     builder.Services.AddGrpcClients(builder.Configuration);
 
-    // gRPC сервери
-    builder.Services.AddGrpc(options =>
-    {
-        // Налаштування gRPC
-        options.MaxReceiveMessageSize = 16 * 1024 * 1024; // 16MB
-        options.MaxSendMessageSize = 16 * 1024 * 1024;    // 16MB
-        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    })
-    .AddServiceOptions<MessageService.Services.MessageGrpcService>(options =>
+    builder.Services.AddGrpcInterceptors();
+
+    builder.Services.AddGrpcServers(builder.Environment);
+
+    builder.Services.AddGrpcServiceOptions<MessageService.Services.MessageGrpcService>(options =>
     {
         options.MaxReceiveMessageSize = 16 * 1024 * 1024;
         options.MaxSendMessageSize = 16 * 1024 * 1024;
     });
 
-    // Додаємо серверний interceptor для gRPC
-    builder.Services.AddScoped<ServerAuthInterceptor>();
+    builder.Services.AddGrpcClientWrappers();
+    // Додаємо HTTP клієнти
+    builder.Services.AddServiceHttpClients(builder.Configuration, builder.Environment);
 
     // MassTransit
     builder.Services.AddMassTransitConfiguration(builder.Configuration);
@@ -61,7 +60,10 @@ try
     builder.Services.AddMessageOperationServices();
 
     // Фонові сервіси
-    builder.Services.AddBackgroundServices();
+    //builder.Services.AddBackgroundServices();
+
+    // Outbox обробка
+    //builder.Services.AddOutboxProcessing<MessageDbContext, MessageOutboxProcessorService>();
 
     // Swagger документація
     builder.Services.AddSwaggerDocumentation();
@@ -94,6 +96,10 @@ try
         app.UseDatabaseMigration();
     }
 
+    app.UseRouting();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
     // Мапінг контролерів
     app.MapControllers();
 
@@ -103,17 +109,11 @@ try
     app.MapGrpcService<MessageService.Services.MessageGrpcService>()
         .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
 
-    app.MapGrpcService<ChatGrpcClient>()
-    .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
-
-    app.MapGrpcService<EncryptionGrpcClient>()
-    .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
-
     // Health check endpoint
     app.MapGet("/health", () => Results.Ok(new
     {
         status = "healthy",
-        service = "ChatService",
+        service = "MessageService",
         timestamp = DateTime.UtcNow,
         environment = app.Environment.EnvironmentName
     }));
@@ -130,7 +130,7 @@ catch (Exception ex)
 {
     // Логування критичних помилок під час запуску
     var logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<Program>();
-    logger.LogCritical(ex, "Критична помилка під час запуску ChatService");
+    logger.LogCritical(ex, "Критична помилка під час запуску MessageService");
     throw;
 }
 

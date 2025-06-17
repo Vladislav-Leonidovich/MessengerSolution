@@ -1,4 +1,5 @@
-﻿using Shared.Interceptors;
+﻿using Grpc.AspNetCore.Server;
+using Shared.Interceptors;
 
 namespace MessageService.Configuration
 {
@@ -37,6 +38,16 @@ namespace MessageService.Configuration
             });
 
             return services;
+        }
+
+        public static IServiceCollection AddGrpcServiceOptions<TService>(
+            this IServiceCollection services,
+            Action<GrpcServiceOptions> configureOptions)
+            where TService : class
+        {
+            return services.Configure<GrpcServiceOptions>(
+                typeof(TService).Name,
+                configureOptions);
         }
     }
 }

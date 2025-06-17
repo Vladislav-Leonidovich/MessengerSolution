@@ -11,67 +11,26 @@ using System.Net.Http;
 using MessageService.Services.Interfaces;
 using Grpc.Core;
 using Shared.Exceptions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MessageService.Services
 {
     public class EncryptionGrpcClient : IEncryptionGrpcClient
     {
-        private readonly GrpcChannel _channel;
         private readonly EncryptionGrpcService.EncryptionGrpcServiceClient _client;
         private readonly ILogger<EncryptionGrpcClient> _logger;
-        private readonly AsyncRetryPolicy _retryPolicy;
-        private readonly AsyncCircuitBreakerPolicy _circuitBreakerPolicy;
         private readonly IAsyncPolicy _resiliencePolicy;
 
-        public EncryptionGrpcClient(IConfiguration configuration, ILogger<EncryptionGrpcClient> logger)
+        public EncryptionGrpcClient(
+            EncryptionGrpcService.EncryptionGrpcServiceClient client, 
+            ILogger<EncryptionGrpcClient> logger)
         {
+            _client = client;
             _logger = logger;
 
-            // Настройка канала gRPC
-            var encryptionServiceUrl = configuration["GrpcServices:EncryptionGrpcService"];
-            _channel = GrpcChannel.ForAddress(encryptionServiceUrl, new GrpcChannelOptions
-            {
-                HttpHandler = new SocketsHttpHandler
-                {
-                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
-                    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                    KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-                    EnableMultipleHttp2Connections = true
-                }
-            });
+            // Настройка политики отказоустойчивости
+            _resiliencePolicy = CreateResiliencePolicy();
 
-            _client = new EncryptionGrpcService.EncryptionGrpcServiceClient(_channel);
-
-            // Настройка Polly для отказоустойчивости
-            _retryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(
-                    3,
-                    retryAttempt => TimeSpan.FromMilliseconds(100 * Math.Pow(2, retryAttempt)),
-                    onRetry: (ex, timeSpan, retryCount, context) =>
-                    {
-                        _logger.LogWarning(ex,
-                            "Помилка під час виклику gRPC-сервісу шифрування. Повторна спроба {RetryCount} через {RetryInterval}ms",
-                            retryCount, timeSpan.TotalMilliseconds);
-                    });
-
-            _circuitBreakerPolicy = Policy
-                .Handle<Exception>()
-                .CircuitBreakerAsync(
-                    5,
-                    TimeSpan.FromMinutes(1),
-                    onBreak: (ex, breakDelay) =>
-                    {
-                        _logger.LogError(ex,
-                            "Перевищено кількість помилок у сервісі шифрування. Circuit breaker відкрито на {BreakDelay}ms",
-                            breakDelay.TotalMilliseconds);
-                    },
-                    onReset: () =>
-                    {
-                        _logger.LogInformation("Автоматичний вимикач закрито. Відновлено з'єднання з сервісом шифрування");
-                    });
-
-            _resiliencePolicy = Policy.WrapAsync(_retryPolicy, _circuitBreakerPolicy);
         }
 
         public async Task<string> EncryptAsync(string plainText)
@@ -238,9 +197,38 @@ namespace MessageService.Services
             }
         }
 
-        public void Dispose()
+        private IAsyncPolicy CreateResiliencePolicy()
         {
-            _channel?.Dispose();
+            var retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(
+                    3, // количество повторов
+                    retryAttempt => TimeSpan.FromMilliseconds(100 * Math.Pow(2, retryAttempt)), // экспоненциальная задержка
+                    onRetry: (ex, timeSpan, retryCount, context) =>
+                    {
+                        _logger.LogWarning(ex,
+                            "Помилка під час виклику gRPC-сервісу чатів. Повторна спроба {RetryCount} через {RetryInterval}мс",
+                            retryCount, timeSpan.TotalMilliseconds);
+                    });
+
+            var circuitBreakerPolicy = Policy
+                .Handle<Exception>()
+                .CircuitBreakerAsync(
+                    5, // количество сбоев, после которых сработает circuit breaker
+                    TimeSpan.FromMinutes(1), // время, на которое circuit breaker разомкнет цепь
+                    onBreak: (ex, breakDelay) =>
+                    {
+                        _logger.LogError(ex,
+                            "Перевищено кількість помилок у сервісі чатів. Circuit breaker відкрито на {BreakDelay}мс",
+                            breakDelay.TotalMilliseconds);
+                    },
+                    onReset: () =>
+                    {
+                        _logger.LogInformation("Circuit breaker закрито. Відновлено з'єднання з сервісом чатів");
+                    });
+
+            // Объединяем политики
+            return Policy.WrapAsync(retryPolicy, circuitBreakerPolicy);
         }
     }
 }

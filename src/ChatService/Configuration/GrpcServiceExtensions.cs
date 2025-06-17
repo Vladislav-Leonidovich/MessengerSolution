@@ -1,8 +1,10 @@
 ﻿using ChatService.Repositories;
+using ChatService.Services;
 using ChatService.Services.Interfaces;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
+using Microsoft.Extensions.DependencyInjection;
 using Shared.Interceptors;
 using Shared.Protos;
 
@@ -10,48 +12,85 @@ namespace ChatService.Configuration
 {
     public static class GrpcServiceExtensions
     {
-        /// <summary>
-        /// Додає gRPC-клієнти до DI-контейнера
-        /// </summary>
         public static IServiceCollection AddGrpcClients(this IServiceCollection services, IConfiguration configuration)
         {
-            ConfigureGrpcClient<MessageGrpcService.MessageGrpcServiceClient>(
-                services, configuration["GrpcServices:MessageService"]);
+            // Використовуємо вбудовані методи .NET для реєстрації gRPC клієнтів
+            services.AddGrpcClient<MessageGrpcService.MessageGrpcServiceClient>(options =>
+            {
+                options.Address = new Uri(configuration["GrpcServices:MessageGrpcService"]);
+            })
+            .ConfigureChannel(channel =>
+            {
+                channel.MaxReceiveMessageSize = 16 * 1024 * 1024;
+                channel.MaxSendMessageSize = 16 * 1024 * 1024;
+            })
+            .AddCallCredentials(async (context, metadata, serviceProvider) =>
+            {
+                var tokenService = serviceProvider.GetRequiredService<ITokenService>();
+                await AddTokenToMetadataAsync(tokenService, metadata);
+            })
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+            {
+                var handler = new HttpClientHandler();
+                var environment = provider.GetRequiredService<IWebHostEnvironment>();
+                if (environment.IsDevelopment())
+                {
+                    handler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                }
+                return handler;
+            });
 
-            // Настройка для IdentityService 
-            ConfigureGrpcClient<IdentityGrpcService.IdentityGrpcServiceClient>(
-                services, configuration["GrpcServices:IdentityService"]);
+            // Аналогічно для інших клієнтів
+            services.AddGrpcClient<IdentityGrpcService.IdentityGrpcServiceClient>(options =>
+            {
+                options.Address = new Uri(configuration["GrpcServices:IdentityGrpcService"]);
+            })
+            .ConfigureChannel(channel =>
+            {
+                channel.MaxReceiveMessageSize = 16 * 1024 * 1024;
+                channel.MaxSendMessageSize = 16 * 1024 * 1024;
+            })
+            .AddCallCredentials(async (context, metadata, serviceProvider) =>
+            {
+                var tokenService = serviceProvider.GetRequiredService<ITokenService>();
+                await AddTokenToMetadataAsync(tokenService, metadata);
+            })
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+            {
+                var handler = new HttpClientHandler();
+                var environment = provider.GetRequiredService<IWebHostEnvironment>();
+                if (environment.IsDevelopment())
+                {
+                    handler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                }
+                return handler;
+            });
 
             return services;
         }
 
-        private static void ConfigureGrpcClient<TClient>(IServiceCollection services, string serviceUrl)
-    where TClient : ClientBase<TClient>
+        /// <summary>
+        /// Реєструє всі обгортки для gRPC клієнтів
+        /// </summary>
+        public static IServiceCollection AddGrpcClientWrappers(this IServiceCollection services)
         {
-            if (string.IsNullOrEmpty(serviceUrl))
+            // Реєструємо обгортки
+            services.AddScoped<IMessageGrpcClient, MessageGrpcClient>();
+            services.AddScoped<IIdentityGrpcClient, IdentityGrpcClient>();
+
+            return services;
+        }
+
+        private static async Task AddTokenToMetadataAsync(ITokenService tokenService, Metadata metadata)
+        {
+            var token = await tokenService.GetServiceToServiceTokenAsync();
+            if (!string.IsNullOrEmpty(token))
             {
-                throw new ArgumentException($"URL для {typeof(TClient).Name} не налаштовано у конфігурації");
+                metadata.Add("Authorization", $"Bearer {token}");
             }
-
-            services.AddScoped(serviceProvider =>
-            {
-                var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-                var tokenService = serviceProvider.GetRequiredService<ITokenService>();
-                var httpClient = httpClientFactory.CreateClient(typeof(TClient).Name);
-
-                var channel = GrpcChannel.ForAddress(serviceUrl, new GrpcChannelOptions
-                {
-                    HttpClient = httpClient,
-                    MaxReceiveMessageSize = 16 * 1024 * 1024,
-                    MaxSendMessageSize = 16 * 1024 * 1024
-                });
-
-                Func<Task<string>> tokenProvider = async () => await tokenService.GetTokenAsync();
-                var logger = serviceProvider.GetRequiredService<ILogger<AuthGrpcInterceptor>>();
-                var interceptor = new AuthGrpcInterceptor(tokenProvider, logger);
-
-                return (TClient)Activator.CreateInstance(typeof(TClient), channel.Intercept(interceptor));
-            });
         }
     }
 }
+

@@ -14,50 +14,50 @@
 
 @if (!string.IsNullOrEmpty(ChatRoomEmptyMessage))
 {
-	<p>@ChatRoomEmptyMessage</p>
+    <p>@ChatRoomEmptyMessage</p>
 }
 else if (chatRoom == null)
 {
-	<p>Завантаження даних чату...</p>
+    <p>Завантаження даних чату...</p>
 }
 else
 {
-	<div class="chat-container">
-		<div class="chat-header">
-			<div class="left-box">
-				<div class="header-text ">@chatRoom.Name</div>
-				<div class="functional-text">Was online - 12:55</div>
-			</div>
-			<div class="right-box">
-				<button class="custom-button"><img src="/Images/Search2.svg" alt="Search" /></button>
-				<button class="custom-button"><img src="/Images/moreicon.svg" alt="More Options" /></button>
-			</div>
-		</div>
-		<div class="chat-messages custom-scroll" id="chat-messages-container" @ref="messagesContainer">
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="left-box">
+                <div class="header-text ">@chatRoom.Name</div>
+                <div class="functional-text">Was online - 12:55</div>
+            </div>
+            <div class="right-box">
+                <button class="custom-button"><img src="/Images/Search2.svg" alt="Search" /></button>
+                <button class="custom-button"><img src="/Images/moreicon.svg" alt="More Options" /></button>
+            </div>
+        </div>
+        <div class="chat-messages custom-scroll" id="chat-messages-container" @ref="messagesContainer">
             @foreach (var message in messages.OrderBy(m => m.CreatedAt))
-			{
-				<div class="message-item @(message.SenderUserId == currentUserId ? "own-message" : "other-message")">
-					<p class="default-text">@message.Content</p>
-					<p class="created-at functional-text">@message.CreatedAt.ToString("HH:mm")</p>
-					@if (message.IsEdited)
-					{
-						<span class="edited-mark">Edited</span>
-					}
-				</div>
-			}
+            {
+                <div class="message-item @(message.SenderUserId == currentUserId ? "own-message" : "other-message")">
+                    <p class="default-text">@message.Content</p>
+                    <p class="created-at functional-text">@message.CreatedAt.ToString("HH:mm")</p>
+                    @if (message.IsEdited)
+                    {
+                        <span class="edited-mark">Edited</span>
+                    }
+                </div>
+            }
 
-			@if (isLoading)
-			{
-				<div class="loading-indicator">
-					<p>Loading more messages...</p>
-				</div>
-			}
-		</div>
-		<div class="chat-input">
-			<div class="bottom-chat-container">
-				<button class="custom-button"><img class="chat-icon" src="/Images/plus.svg" alt="Add" /></button>
-				<textarea class="auto-resize" @bind="Text"
-				oninput="
+            @if (isLoading)
+            {
+                <div class="loading-indicator">
+                    <p>Loading more messages...</p>
+                </div>
+            }
+        </div>
+        <div class="chat-input">
+            <div class="bottom-chat-container">
+                <button class="custom-button"><img class="chat-icon" src="/Images/plus.svg" alt="Add" /></button>
+                <textarea class="auto-resize" @bind="Text"
+                oninput="
 					  let minHeight=35;
 					  let maxHeight=150;
 					  this.style.height='35px' ;
@@ -74,13 +74,13 @@ else
 				      this.style.height = maxHeight + 'px';
 				      this.style.overflowY = 'auto';
 				  }
-				"
-				placeholder="Type text...">
-				</textarea>
-				<button class="custom-button" @onclick="SendMessage"><img class="chat-icon" src="/Images/sendicon.svg" alt="Send" /></button>
-			</div>
-		</div>
-	</div>
+                "
+                placeholder="Type text...">
+                </textarea>
+                <button class="custom-button" @onclick="SendMessage"><img class="chat-icon" src="/Images/sendicon.svg" alt="Send" /></button>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -293,15 +293,11 @@ else
         if (string.IsNullOrWhiteSpace(Text) || chatRoom == null)
             return;
 
-        var message = new SendMessageDto
-            {
-                ChatRoomId = chatRoom.Id,
-                Content = Text
-            };
+        var message = Text;
 
         try
         {
-            await MessageService.SendMessageAsync(message);
+            await MessageService.SendMessageAsync(chatRoom.Id, message);
             Text = string.Empty;
         }
         catch (Exception ex)

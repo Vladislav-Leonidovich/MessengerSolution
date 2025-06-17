@@ -37,11 +37,10 @@ namespace ChatService.Configuration
             services.AddScoped<IChatService, Services.ChatService>();
             services.AddScoped<IFolderService, FolderService>();
             services.AddScoped<IChatOperationService, ChatOperationService>();
-            services.AddScoped<IEventPublisher, OutboxEventPublisher>();
 
             // gRPC сервіси
-            services.AddScoped<IMessageGrpcService, MessageGrpcService>();
-            services.AddScoped<IIdentityGrpcService, IdentityGrpcService>();
+            services.AddScoped<IMessageGrpcClient, MessageGrpcClient>();
+            services.AddScoped<IIdentityGrpcClient, IdentityGrpcClient>();
 
             // Допоміжні сервіси
             services.AddScoped<ITokenService, TokenService>();

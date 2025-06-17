@@ -39,7 +39,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
 
             try
             {
-                /*// Розшифровуємо вміст повідомлення перед надсиланням клієнтам
+                // Розшифровуємо вміст повідомлення перед надсиланням клієнтам
                 string content;
                 try
                 {
@@ -51,7 +51,7 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                     // Якщо сервіс шифрування недоступний, показуємо заглушку
                     _logger.LogWarning("Сервіс шифрування недоступний. Повідомлення буде надіслано із заглушкою.");
                     content = "Повідомлення недоступне для відображення";
-                }*/
+                }
 
                 // Створюємо DTO для надсилання через SignalR
                 var messageDto = new MessageDto

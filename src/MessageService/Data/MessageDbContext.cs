@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using MessageService.Models;
 using Microsoft.EntityFrameworkCore;
 using Shared.Contracts;
+using Shared.Outbox;
 
 namespace MessageService.Data
 {
@@ -28,6 +29,9 @@ namespace MessageService.Data
 
             modelBuilder.Entity<Message>()
                 .HasIndex(m => m.CorrelationId);
+
+            modelBuilder.Entity<Shared.Outbox.OutboxMessage>()
+        .Property(x => x.NextRetryAt);
 
             modelBuilder.Entity<OutboxMessage>()
                 .HasIndex(o => o.ProcessedAt);

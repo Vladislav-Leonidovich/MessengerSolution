@@ -2,11 +2,13 @@
 using IdentityService.Models;
 using Shared.DTOs.Identity;
 using IdentityService.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 
 namespace IdentityService.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [AllowAnonymous]
     public class AuthController : Controller
     {
         private readonly IAuthService _authService;

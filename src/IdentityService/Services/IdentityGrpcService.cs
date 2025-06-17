@@ -19,7 +19,7 @@ namespace IdentityService.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(searchService));
         }
 
-        public async Task<UserInfoResponse> GetUserInfo(GetUserInfoRequest request, ServerCallContext context)
+        public async override Task<UserInfoResponse> GetUserInfoByUserId(GetUserInfoRequest request, ServerCallContext context)
         {
             try
             {
@@ -60,7 +60,7 @@ namespace IdentityService.Services
             }
         }
 
-        public async Task<GetUsersInfoBatchResponse> GetUsersInfoBatch(
+        public async override Task<GetUsersInfoBatchResponse> GetUsersInfoByUserIdBatch(
             GetUsersInfoBatchRequest request,
             ServerCallContext context)
         {

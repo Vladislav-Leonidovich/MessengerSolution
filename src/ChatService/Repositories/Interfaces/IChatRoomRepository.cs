@@ -1,4 +1,5 @@
-﻿using Shared.DTOs.Chat;
+﻿using ChatService.Models;
+using Shared.DTOs.Chat;
 using Shared.DTOs.Message;
 
 namespace ChatService.Repositories.Interfaces
@@ -28,5 +29,8 @@ namespace ChatService.Repositories.Interfaces
         Task<List<int>> GetChatParticipantsFromPrivateChatAsync(int chatRoomId);
         Task<List<int>> GetChatParticipantsFromGroupChatAsync(int chatRoomId);
         Task<MessageDto> GetLastMessagePreviewAsync(int chatRoomId);
+        Task<Dictionary<int, MessageDto>> GetLastMessagePreviewBatchAsync(IEnumerable<int> chatRoomIds);
+        Task AddToOutboxAsync(string eventType, object eventData);
+        Task<string> GetChatNameAsync(int chatRoomId, int currentUserId);
     }
 }

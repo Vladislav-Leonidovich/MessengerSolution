@@ -37,7 +37,6 @@
 		<Folder Include="DTOs\Encryption\" />
 		<Folder Include="DTOs\Identity\" />
 		<Folder Include="DTOs\Common\" />
-		<Folder Include="DTOs\Responses\" />
 		<Folder Include="Authorization\" />
 		<Folder Include="Contracts\" />
 		<Folder Include="Consumers\" />

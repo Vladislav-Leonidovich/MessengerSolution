@@ -11,53 +11,63 @@ using Shared.DTOs.Responses;
 using MessageService.Models;
 using MessageService.Sagas.MessageDelivery.Events;
 using MessageService.Sagas.DeleteAllMessages.Events;
+using MessageService.BackgroundServices;
+using MessageService.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Polly;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 
 namespace MessageService.Services
 {
     public class MessageService : IMessageService
     {
-        private readonly IEventPublisher _eventPublisher;
         private readonly IChatGrpcClient _chatGrpcClient;
         private readonly IMessageRepository _messageRepository;
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageAuthorizationService _authService;
+        private readonly IHubContext<MessageHub> _hubContext;
+        private readonly IEncryptionGrpcClient _encryptionClient;
 
         public MessageService(
             IHttpClientFactory httpClientFactory,
-            IEventPublisher eventPublisher,
             IChatGrpcClient chatGrpcClient,
             IMessageRepository messageRepository,
             IMessageAuthorizationService authService,
-            ILogger<MessageService> logger)
+            ILogger<MessageService> logger,
+            IHubContext<MessageHub> hubContext,
+            IEncryptionGrpcClient encryptionClient)
         {
-            _eventPublisher = eventPublisher;
             _chatGrpcClient = chatGrpcClient;
             _messageRepository = messageRepository;
             _authService = authService;
             _logger = logger;
+            _hubContext = hubContext;
+            _encryptionClient = encryptionClient;
         }
-        
+
         // Надсилає повідомлення з використанням саги для забезпечення надійної доставки
-        public async Task<ApiResponse<Task>> SendMessageViaSagaAsync(SendMessageDto model, int userId)
+        public async Task<ApiResponse<Task>> SendMessageViaSagaAsync(string content, int userId, int chatRoomId)
         {
             try
             {
                 // Перевіряємо доступ до чату через gRPC
-                await _authService.EnsureCanAccessChatRoomAsync(userId, model.ChatRoomId);
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 // Запускаємо сагу для обробки надсилання повідомлення
                 var correlationId = Guid.NewGuid();
 
-                // Публікуємо подію початку відправки повідомлення через RabbitMQ
-                await _eventPublisher.PublishAsync(new MessageDeliveryStartedEvent
+                var @event = new MessageDeliveryStartedEvent
                 {
                     CorrelationId = correlationId,
                     MessageId = -1,
-                    ChatRoomId = model.ChatRoomId,
+                    ChatRoomId = chatRoomId,
                     SenderUserId = userId,
-                    Content = model.Content
-                });
+                    Content = content
+                };
+
+                // Публікуємо подію початку відправки повідомлення через Outbox
+                await _messageRepository.AddToOutboxAsync(nameof(@event), @event);
 
                 return ApiResponse<Task>.Ok("Повідомлення відправлено і буде доставлено отримувачам");
             }
@@ -78,12 +88,62 @@ namespace MessageService.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", model.ChatRoomId);
+                _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", chatRoomId);
                 return ApiResponse<Task>.Fail("Сталася внутрішня помилка сервера");
             }
         }
 
-        
+        public async Task<ApiResponse<MessageDto>> SendMessageAsync(string content, int userId, int chatRoomId)
+        {
+            try
+            {
+                // Перевіряємо доступ до чату через gRPC
+                await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
+
+                var correlationId = Guid.NewGuid();
+
+                // Додаємо повідомлення до репозиторію
+                var messageDto = await _messageRepository.CreateMessageAsync(
+                    content,
+                    userId,
+                    correlationId,
+                    chatRoomId);
+
+                string groupName = chatRoomId.ToString();
+                await _hubContext.Clients.Group(groupName).SendAsync("ReceiveMessage", messageDto);
+
+                return ApiResponse<MessageDto>.Ok(messageDto, "Повідомлення успішно надіслано");
+            }
+            catch (ServiceUnavailableException)
+            {
+                // Якщо сервіс шифрування недоступний, показуємо заглушку
+                _logger.LogWarning("Сервіс шифрування недоступний. Повідомлення буде надіслано із заглушкою.");
+                content = "Повідомлення недоступне для відображення";
+                return ApiResponse<MessageDto>.Fail("Помилка при дешифруванні повідомлення");
+            }
+            catch (EntityNotFoundException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message);
+            }
+            catch (DatabaseException ex)
+            {
+                _logger.LogError(ex, "Помилка бази даних при надсиланні повідомлення");
+                return ApiResponse<MessageDto>.Fail("Помилка при роботі з базою даних");
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                _logger.LogWarning(ex.Message);
+                return ApiResponse<MessageDto>.Fail(ex.Message, new List<string> { "Доступ заборонено" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Несподівана помилка при надсиланні повідомлення для чату {ChatRoomId}", chatRoomId);
+                return ApiResponse<MessageDto>.Fail("Сталася внутрішня помилка сервера");
+            }
+        }
+
+
         // Отримує повідомлення з чату з підтримкою пагінації
         public async Task<ApiResponse<IEnumerable<MessageDto>>> GetMessagesAsync(int chatRoomId, int userId, int startIndex, int count)
         {
@@ -118,7 +178,7 @@ namespace MessageService.Services
             }
         }
 
-        
+
         // Отримує кількість повідомлень у чаті
         public async Task<ApiResponse<int>> GetMessagesCountByChatRoomIdAsync(int chatRoomId, int userId)
         {
@@ -157,7 +217,7 @@ namespace MessageService.Services
             }
         }
 
-        
+
         // Позначає повідомлення як прочитане
         public async Task<ApiResponse<MessageDto>> MarkMessageAsRead(int messageId, int userId)
         {
@@ -181,14 +241,15 @@ namespace MessageService.Services
                 // Позначаємо повідомлення як прочитане через репозиторій
                 var updatedMessageDto = await _messageRepository.MarkMessageAsReadByIdAsync(messageId);
 
-                // Публікуємо подію про зміну стану повідомлення через RabbitMQ
-                await _eventPublisher.PublishAsync(new MessageUpdatedEvent
+                var @event = new MessageUpdatedEvent
                 {
                     Id = messageId,
                     ChatRoomId = messageDto.ChatRoomId,
                     IsRead = true,
                     ReadAt = DateTime.UtcNow
-                });
+                };
+                // Публікуємо подію про оновлення повідомлення через Outbox
+                await _messageRepository.AddToOutboxAsync(nameof(@event), @event);
 
                 return ApiResponse<MessageDto>.Ok(updatedMessageDto, "Повідомлення позначено як прочитане");
             }
@@ -214,7 +275,7 @@ namespace MessageService.Services
             }
         }
 
-        
+
         // Отримує останнє повідомлення з чату для попереднього перегляду
         public async Task<ApiResponse<MessageDto>> GetLastMessagePreviewByChatRoomIdAsync(int chatRoomId, int userId)
         {
@@ -253,7 +314,7 @@ namespace MessageService.Services
             }
         }
 
-        
+
         // Видаляє повідомлення
         public async Task<ApiResponse<bool>> DeleteMessageAsync(int messageId, int userId)
         {
@@ -277,13 +338,16 @@ namespace MessageService.Services
                 await _messageRepository.DeleteMessageByIdAsync(messageId);
 
                 // Публікуємо подію про видалення повідомлення через RabbitMQ
-                await _eventPublisher.PublishAsync(new MessageDeletedEvent
+                var @event = new MessageDeletedEvent
                 {
                     Id = messageId,
                     ChatRoomId = messageDto.ChatRoomId,
                     DeletedByUserId = userId,
                     DeletedAt = DateTime.UtcNow
-                });
+                };
+
+                // Публікуємо подію про видалення повідомлення через Outbox
+                await _messageRepository.AddToOutboxAsync(nameof(@event), @event);
 
                 return ApiResponse<bool>.Ok(true, "Повідомлення успішно видалено");
             }
@@ -309,7 +373,7 @@ namespace MessageService.Services
             }
         }
 
-        
+
         // Видаляє всі повідомлення з чату за допомогою саги
         public async Task<ApiResponse<bool>> DeleteMessagesByChatRoomIdAsync(int chatRoomId, int userId)
         {
@@ -333,13 +397,15 @@ namespace MessageService.Services
                 // Запускаємо сагу для масового видалення повідомлень
                 var correlationId = Guid.NewGuid();
 
-                // Публікуємо команду через RabbitMQ
-                await _eventPublisher.PublishAsync(new DeleteAllChatMessagesCommand
+                var @event = new DeleteAllChatMessagesCommand
                 {
                     CorrelationId = correlationId,
                     ChatRoomId = chatRoomId,
                     InitiatedByUserId = userId
-                });
+                };
+
+                // Публікуємо подію початку видалення повідомлень через Outbox
+                await _messageRepository.AddToOutboxAsync(nameof(@event), @event);
 
                 return ApiResponse<bool>.Ok(true, "Запит на видалення всіх повідомлень прийнято");
             }
@@ -381,12 +447,15 @@ namespace MessageService.Services
                     return ApiResponse<bool>.Fail("Повідомлення не належить жодній сазі доставки");
                 }
 
-                await _eventPublisher.PublishAsync(new MessageDeliveredToUserEvent
+                var @event = new MessageDeliveredToUserEvent
                 {
                     CorrelationId = correlationId.Value,
                     MessageId = messageId,
                     UserId = userId
-                });
+                };
+
+                // Публікуємо подію підтвердження доставки через Outbox
+                await _messageRepository.AddToOutboxAsync(nameof(@event), @event);
 
                 return ApiResponse<bool>.Ok(true, "Підтвердження доставки надіслано");
             }
@@ -399,6 +468,27 @@ namespace MessageService.Services
             {
                 _logger.LogError(ex, "Помилка при підтвердженні доставки повідомлення {MessageId}", messageId);
                 return ApiResponse<bool>.Fail("Сталася внутрішня помилка сервера");
+            }
+        }
+
+        public async Task<ApiResponse<Dictionary<int, MessageDto>>> GetLastMessagesBatchAsync(IEnumerable<int> chatRoomIds, int userId)
+        {
+            try
+            {
+                // Перевіряємо доступ до кожного чату через gRPC
+                var tasks = chatRoomIds.Select(chatRoomId => _chatGrpcClient.CheckAccessAsync(userId, chatRoomId));
+                var accessResults = Task.WhenAll(tasks).Result;
+
+                // Фільтруємо чати, до яких користувач має доступ
+                var accessibleChatRoomIds = chatRoomIds.Where((id, index) => accessResults[index]).ToList();
+                // Отримуємо останні повідомлення для доступних чатів
+                var messages = await _messageRepository.GetLastMessagePreviewBatchByChatRoomIdAsync(accessibleChatRoomIds);
+                return ApiResponse<Dictionary<int, MessageDto>>.Ok(messages);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при отриманні останніх повідомлень для чатів");
+                return ApiResponse<Dictionary<int, MessageDto>>.Fail("Сталася внутрішня помилка сервера");
             }
         }
     }

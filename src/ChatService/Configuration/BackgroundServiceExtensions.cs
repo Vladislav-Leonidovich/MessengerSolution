@@ -1,4 +1,5 @@
 ﻿using ChatService.BackgroundServices;
+using Shared.Outbox;
 
 namespace ChatService.Configuration
 {
@@ -11,9 +12,6 @@ namespace ChatService.Configuration
         /// <returns>Колекція сервісів</returns>
         public static IServiceCollection AddBackgroundServices(this IServiceCollection services)
         {
-            // Сервіс для обробки Outbox повідомлень
-            services.AddHostedService<OutboxProcessorService>();
-
             // Сервіс для очистки старих Outbox повідомлень
             services.AddHostedService<OutboxCleanupService>();
 

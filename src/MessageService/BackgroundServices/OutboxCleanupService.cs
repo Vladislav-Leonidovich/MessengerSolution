@@ -1,6 +1,7 @@
 ﻿using MessageService.Data;
 using MessageService.Models;
 using Microsoft.EntityFrameworkCore;
+using Shared.Outbox;
 
 namespace MessageService.BackgroundServices
 {

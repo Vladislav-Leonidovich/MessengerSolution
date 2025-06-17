@@ -2,6 +2,7 @@
 using ChatService.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Shared.Outbox;
 
 namespace ChatService.BackgroundServices
 {

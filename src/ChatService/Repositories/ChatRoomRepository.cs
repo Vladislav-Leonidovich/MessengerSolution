@@ -10,20 +10,22 @@ using Shared.DTOs.Identity;
 using Shared.DTOs.Message;
 using ChatService.Services.Interfaces;
 using Grpc.Core;
+using System.Text.Json;
+using Shared.Outbox;
 
 namespace ChatService.Repositories
 {
     public class ChatRoomRepository : IChatRoomRepository
     {
         private readonly ChatDbContext _context;
-        private readonly IIdentityGrpcService _identityGrpcService;
-        private readonly IMessageGrpcService _messageInfoService;
+        private readonly IIdentityGrpcClient _identityGrpcService;
+        private readonly IMessageGrpcClient _messageInfoService;
         private readonly IMapperFactory _mapperFactory;
 
         public ChatRoomRepository(
             ChatDbContext context,
-            IIdentityGrpcService identityGrpcService,
-            IMessageGrpcService messageInfoService,
+            IIdentityGrpcClient identityGrpcService,
+            IMessageGrpcClient messageInfoService,
             IMapperFactory mapperFactory)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -68,8 +70,6 @@ namespace ChatService.Repositories
                     .Include(pcr => pcr.UserChatRooms)
                     .AsNoTracking()
                     .FirstOrDefaultAsync(pcr => pcr.Id == chatRoomId);
-
-                var lastMessagePreview = await GetLastMessagePreviewAsync(chatRoomId);
 
                 return await _mapperFactory.GetMapper<PrivateChatRoom, ChatRoomDto>().MapToDtoAsync(chat);
             }
@@ -186,7 +186,7 @@ namespace ChatService.Repositories
                     {
                         Id = existingChat.Id,
                         CreatedAt = existingChat.CreatedAt,
-                        Name = await GetChatNameAsync(existingChat, currentUserId),
+                        Name = await GetChatNameAsync(existingChat.Id, currentUserId),
                         ChatRoomType = existingChat.ChatRoomType,
                         ParticipantIds = existingChat.UserChatRooms.Select(ucr => ucr.UserId).ToList(),
                         LastMessagePreview = await GetLastMessagePreviewAsync(existingChat.Id)
@@ -678,8 +678,18 @@ namespace ChatService.Repositories
         }
 
         // Вспоміжні методи для отримання даних
-        private async Task<string> GetChatNameAsync(PrivateChatRoom chat, int currentUserId = 0)
+        public async Task<string> GetChatNameAsync(int chatRoomId, int currentUserId)
         {
+            var chat = await _context.PrivateChatRooms
+                    .Include(pcr => pcr.UserChatRooms)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(pcr => pcr.Id == chatRoomId);
+
+            if(chat == null)
+            {
+                return "Приватний чат";
+            }
+
             // Для приватного чату назвою є відображуване ім'я співрозмовника
             int? partnerId = chat.UserChatRooms
                 .FirstOrDefault(ucr => ucr.UserId != currentUserId)?.UserId;
@@ -715,6 +725,39 @@ namespace ChatService.Repositories
             {
                 throw new DatabaseException("Помилка при отриманні попереднього повідомлення", ex);
             }
+        }
+
+        public async Task<Dictionary<int, MessageDto>> GetLastMessagePreviewBatchAsync(IEnumerable<int> chatRoomIds)
+        {
+            try
+            {
+                // Використовуємо gRPC-сервіс для отримання останніх повідомлень
+                var lastMessages = await _messageInfoService.GetLastMessagesBatchAsync(chatRoomIds);
+                return lastMessages ?? new Dictionary<int, MessageDto>();
+            }
+            catch (RpcException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new DatabaseException("Помилка при отриманні попереднього повідомлення", ex);
+            }
+        }
+
+        public async Task AddToOutboxAsync(string eventType, object eventData)
+        {
+            var outboxMessage = new OutboxMessage
+            {
+                Id = Guid.NewGuid(),
+                EventType = eventType,
+                EventData = JsonSerializer.Serialize(eventData),
+                CreatedAt = DateTime.UtcNow,
+                Status = OutboxMessageStatus.Pending
+            };
+
+            _context.OutboxMessages.Add(outboxMessage);
+            await _context.SaveChangesAsync();
         }
     }
 }

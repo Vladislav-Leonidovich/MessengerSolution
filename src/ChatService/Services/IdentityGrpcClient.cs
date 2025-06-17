@@ -9,16 +9,16 @@ using Shared.Protos;
 namespace ChatService.Services
 {
     [Authorize]
-    public class IdentityGrpcService : IIdentityGrpcService
+    public class IdentityGrpcClient : IIdentityGrpcClient
     {
         private readonly Shared.Protos.IdentityGrpcService.IdentityGrpcServiceClient _client;
         private readonly IMapperFactory _mapperFactory;
-        private readonly ILogger<IdentityGrpcService> _logger;
+        private readonly ILogger<IdentityGrpcClient> _logger;
 
-        public IdentityGrpcService(
+        public IdentityGrpcClient(
             Shared.Protos.IdentityGrpcService.IdentityGrpcServiceClient client,
             IMapperFactory mapperFactory,
-            ILogger<IdentityGrpcService> logger)
+            ILogger<IdentityGrpcClient> logger)
         {
             _client = client ?? throw new ArgumentNullException(nameof(mapperFactory));
             _mapperFactory = mapperFactory ?? throw new ArgumentNullException(nameof(mapperFactory));

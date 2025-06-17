@@ -8,15 +8,15 @@ using Shared.Protos;
 namespace ChatService.Services
 {
     [Authorize]
-    public class MessageGrpcService : IMessageGrpcService
+    public class MessageGrpcClient : IMessageGrpcClient
     {
         private readonly Shared.Protos.MessageGrpcService.MessageGrpcServiceClient _client;
-        private readonly ILogger<MessageGrpcService> _logger;
+        private readonly ILogger<MessageGrpcClient> _logger;
         private readonly IMapperFactory _mapperFactory;
 
-        public MessageGrpcService(
+        public MessageGrpcClient(
             Shared.Protos.MessageGrpcService.MessageGrpcServiceClient client,
-            ILogger<MessageGrpcService> logger,
+            ILogger<MessageGrpcClient> logger,
             IMapperFactory mapperFactory)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));

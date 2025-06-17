@@ -15,11 +15,13 @@ namespace IdentityService.Services
     {
         private readonly IdentityDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(IdentityDbContext context, IConfiguration configuration)
+        public AuthService(IdentityDbContext context, IConfiguration configuration, ILogger<AuthService> logger)
         {
             _context = context;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<bool> UserExistsAsync(string username, string email)
@@ -123,6 +125,81 @@ namespace IdentityService.Services
                 RefreshToken = refreshTokenEntry.RefreshToken,
                 RefreshTokenExpiresAt = refreshTokenEntry.ExpiresAt
             };
+        }
+
+        public async Task<string> GenerateServiceTokenAsync(string serviceName)
+        {
+            // Створюємо особливі клейми для сервісу
+            var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, serviceName),
+            new Claim(ClaimTypes.Role, "Service"), // Спеціальна роль для сервісів
+            new Claim("service_name", serviceName)
+        };
+
+            // Можна додати більше клеймів для різних сервісів
+            if (serviceName == "MessageService")
+            {
+                claims.Add(new Claim("permission", "message_service_all"));
+            }
+            else if (serviceName == "ChatService")
+            {
+                claims.Add(new Claim("permission", "chat_service_all"));
+            }
+            else if (serviceName == "EncryptionService")
+            {
+                claims.Add(new Claim("permission", "encryption_service_all"));
+            }
+            else if (serviceName == "IdentityService")
+            {
+                claims.Add(new Claim("permission", "identity_service_all"));
+            }
+
+            // Генеруємо JWT з довшим часом життя для сервісів
+            var token = await GenerateJwtTokenAsync(claims, TimeSpan.FromHours(12));
+            return token;
+        }
+
+        private async Task<string> GenerateJwtTokenAsync(IEnumerable<Claim> claims, TimeSpan expiration)
+        {
+            try
+            {
+                // Отримуємо секретний ключ з конфігурації
+                var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ??
+                                  throw new InvalidOperationException("JWT Secret Key не налаштовано");
+
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey));
+                var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+                // Час видачі та закінчення
+                var now = DateTime.UtcNow;
+                var expires = now.Add(expiration);
+
+                // Створюємо JWT токен
+                var tokenDescriptor = new SecurityTokenDescriptor
+                {
+                    Subject = new ClaimsIdentity(claims),
+                    IssuedAt = now,
+                    Expires = expires,
+                    SigningCredentials = credentials,
+                    // Можна також додати issuer та audience, якщо потрібно
+                    Issuer = _configuration["Jwt:Issuer"],
+                    Audience = _configuration["Jwt:Audience"]
+                };
+
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var token = tokenHandler.CreateToken(tokenDescriptor);
+                var tokenString = tokenHandler.WriteToken(token);
+
+                _logger.LogDebug("Згенеровано JWT токен з терміном дії до {ExpiryTime}", expires);
+
+                return tokenString;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Помилка при генерації JWT токена");
+                throw new ApplicationException("Не вдалося створити JWT токен", ex);
+            }
         }
 
         private string GenerateRefreshToken()

@@ -1,6 +1,7 @@
 ﻿using Shared.Protos;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
+using EncryptionService.Services.Interfaces;
 
 namespace EncryptionService.Services
 {
@@ -60,24 +61,27 @@ namespace EncryptionService.Services
             }
         }
 
-        public override Task<BatchEncryptResponse> EncryptBatch(BatchEncryptRequest request, ServerCallContext context)
+        public override async Task<BatchEncryptResponse> EncryptBatch(BatchEncryptRequest request, ServerCallContext context)
         {
             try
             {
                 var response = new BatchEncryptResponse { Success = true };
 
-                foreach (var plainText in request.PlainTexts)
-                {
-                    var cipherText = _encryptionService.Encrypt(plainText);
-                    response.CipherTexts.Add(cipherText);
-                }
+                var encryptionTasks = request.PlainTexts.Select(plainText =>
+                Task.Run(() => _encryptionService.Encrypt(plainText))).ToArray();
 
-                return Task.FromResult(response);
+                // Очікуємо завершення всіх завдань
+                var results = await Task.WhenAll(encryptionTasks);
+
+                // Додаємо результати до відповіді
+                response.CipherTexts.AddRange(results);
+
+                return response;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка під час пакетного шифрування повідомлень");
-                return Task.FromResult(new BatchEncryptResponse
+                return await Task.FromResult(new BatchEncryptResponse
                 {
                     Success = false,
                     ErrorMessage = "Сталася помилка під час пакетного шифрування"
@@ -85,24 +89,25 @@ namespace EncryptionService.Services
             }
         }
 
-        public override Task<BatchDecryptResponse> DecryptBatch(BatchDecryptRequest request, ServerCallContext context)
+        public override async Task<BatchDecryptResponse> DecryptBatch(BatchDecryptRequest request, ServerCallContext context)
         {
             try
             {
                 var response = new BatchDecryptResponse { Success = true };
 
-                foreach (var cipherText in request.CipherTexts)
-                {
-                    var plainText = _encryptionService.Decrypt(cipherText);
-                    response.PlainTexts.Add(plainText);
-                }
+                var decryptionTasks = request.CipherTexts.Select(cipherText =>
+                Task.Run(() => _encryptionService.Decrypt(cipherText))).ToArray();
 
-                return Task.FromResult(response);
+                var results = await Task.WhenAll(decryptionTasks);
+
+                response.PlainTexts.AddRange(results);
+
+                return response;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Помилка під час пакетного дешифрування повідомлень");
-                return Task.FromResult(new BatchDecryptResponse
+                return await Task.FromResult(new BatchDecryptResponse
                 {
                     Success = false,
                     ErrorMessage = "Сталася помилка під час пакетного дешифрування"

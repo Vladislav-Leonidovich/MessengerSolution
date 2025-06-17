@@ -2,38 +2,29 @@
 using Polly;
 using Shared.Protos;
 using MessageService.Services.Interfaces;
+using Grpc.Core.Interceptors;
+using Shared.Interceptors;
+using Grpc.Core;
+using System.Runtime.ConstrainedExecution;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MessageService.Services
 {
+    [Authorize]
     // src/MessageService/Services/ChatGrpcClient.cs
-    public class ChatGrpcClient : IChatGrpcClient, IDisposable
+    public class ChatGrpcClient : IChatGrpcClient
     {
-        private readonly GrpcChannel _channel;
         private readonly ChatGrpcService.ChatGrpcServiceClient _client;
-        private readonly ILogger<ChatGrpcClient> _logger;
         private readonly IAsyncPolicy _resiliencePolicy;
+        private readonly ILogger<ChatGrpcClient> _logger;
 
         public ChatGrpcClient(
-            IConfiguration config,
+            ChatGrpcService.ChatGrpcServiceClient client,
             ILogger<ChatGrpcClient> logger)
         {
             _logger = logger;
-
-            // Настройка канала
-            var chatServiceUrl = config["GrpcServices:ChatGrpcService"];
-            _channel = GrpcChannel.ForAddress(chatServiceUrl, new GrpcChannelOptions
-            {
-                HttpHandler = new SocketsHttpHandler
-                {
-                    EnableMultipleHttp2Connections = true,
-                    KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-                    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5)
-                }
-            });
-
-            _client = new ChatGrpcService.ChatGrpcServiceClient(_channel);
-
+            _client = client;
+            
             // Настройка политики отказоустойчивости
             _resiliencePolicy = CreateResiliencePolicy();
         }
@@ -181,11 +172,6 @@ namespace MessageService.Services
 
             // Объединяем политики
             return Policy.WrapAsync(retryPolicy, circuitBreakerPolicy);
-        }
-
-        public void Dispose()
-        {
-            _channel?.Dispose();
         }
     }
 }

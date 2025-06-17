@@ -1,125 +1,122 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Text;
-using IdentityService.Data;
-using IdentityService.Repositories.Interfaces;
-using IdentityService.Repositories;
+using ChatService.Configuration;
 using IdentityService.Services;
-using IdentityService.Services.Interfaces;
+using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Додайте CORS-сервіси
-builder.Services.AddCors(options =>
+try
 {
-    options.AddPolicy("AllowAll", policy =>
+    // === КОНФІГУРАЦІЯ СЕРВІСІВ ===
+
+    // Базові ASP.NET Core сервіси
+    builder.Services.AddControllers();
+
+    // Налаштування бази даних
+    builder.Services.AddDatabase(builder.Configuration);
+
+    // Налаштування обробки помилок
+    builder.Services.AddExceptionHandling();
+
+    // Налаштування автентифікації та авторизації
+    builder.Services.AddJwtAuthentication(builder.Configuration);
+    builder.Services.AddCustomAuthorization();
+
+    // Реєстрація репозиторіїв
+    builder.Services.AddRepositories();
+
+    // Реєстрація бізнес-сервісів
+    builder.Services.AddBusinessServices();
+
+    builder.Services.AddGrpcInterceptors();
+
+    builder.Services.AddGrpcServers(builder.Environment);
+
+    builder.Services.AddGrpcServiceOptions<IdentityGrpcService>(options =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-
-// Add services to the container.
-// Читання рядка підключення з appsettings.json
-var connectionString = builder.Configuration.GetConnectionString("IdentityDatabase")
-    ?? "Server=localhost;Database=identitydb;User=root;Password=root;";
-
-builder.Services.AddDbContext<IdentityDbContext>(options =>
-    options.UseMySQL(connectionString));
-
-builder.Services.AddControllers();
-
-// Реєструємо наші сервіси
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ISearchService, SearchService>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-
-// Додати gRPC сервіси
-builder.Services.AddGrpc();
-
-JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        var jwtSecretKey = builder.Configuration["JWT_SECRET_KEY"];
-        if (string.IsNullOrEmpty(jwtSecretKey))
-        {
-            throw new InvalidOperationException("JWT Secret Key is not configured");
-        }
-        var key = Encoding.UTF8.GetBytes(jwtSecretKey);
-
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ClockSkew = TimeSpan.Zero
-        };
+        options.MaxReceiveMessageSize = 16 * 1024 * 1024;
+        options.MaxSendMessageSize = 16 * 1024 * 1024;
     });
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
+    // Swagger документація
+    builder.Services.AddSwaggerDocumentation();
+
+    // CORS
+    builder.Services.AddCors();
+
+    // Логування
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole();
+    builder.Logging.AddDebug();
+
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Logging.SetMinimumLevel(LogLevel.Debug);
+    }
+
+    var app = builder.Build();
+
+    // === КОНФІГУРАЦІЯ PIPELINE ===
+
+    // Автоматичне застосування міграцій (тільки в Development)
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseDatabaseMigration();
+    }
+
+    // Налаштування middleware помилок (краще в Development)
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+        app.UseDatabaseMigration();
+
+        // Додаємо Swagger тільки в Development
+        app.UseSwagger();
+        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity Service API v1"));
+    }
+    else
+    {
+        // В Production можна використовувати глобальний обробник помилок
+        app.UseExceptionHandler("/error");
+    }
+
+    app.UseRouting();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    // Мапінг контролерів
+    app.MapControllers();
+
+    // gRPC сервіси з interceptor'ом
+    app.MapGrpcService<IdentityGrpcService>()
+        .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
+
+    // Health check endpoint
+    app.MapGet("/health", () => Results.Ok(new
+    {
+        status = "healthy",
+        service = "IdentityService",
+        timestamp = DateTime.UtcNow,
+        environment = app.Environment.EnvironmentName
+    }));
+
+    // Стартовий лог
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("IdentityService запускається в середовищі: {Environment}", app.Environment.EnvironmentName);
+    logger.LogInformation("База даних: {ConnectionString}",
+        builder.Configuration.GetConnectionString("IdentityDatabase")?.Replace("Password=", "Password=***"));
+
+    app.Run();
+}
+catch (Exception ex)
 {
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey
-    });
-
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
-    });
-});
-
-var app = builder.Build();
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    dbContext.Database.Migrate();
+    // Логування критичних помилок під час запуску
+    var logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<Program>();
+    logger.LogCritical(ex, "Критична помилка під час запуску IdentityService");
+    throw;
 }
 
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// Конфигурация middleware
-
-app.UseHttpsRedirection();
-
-app.UseCors("AllowAll");
-
-app.UseRouting();
-
-app.UseAuthentication();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.MapGrpcService<IdentityGrpcService>();
-
-app.Run();
+// Часткова класс Program для тестування
+public partial class Program { }

@@ -2,94 +2,369 @@
 @using MauiClient.Services
 @using MauiClient.ViewModels
 @using Shared.DTOs.Chat
+@using Shared.DTOs.Identity
 @inject IChatService ChatService
 @inject IAuthService AuthService
+@inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @attribute [Authorize]
 
 @if (chatRooms == null)
 {
-						<p>Завантаження чатів...</p>
+    <p>Завантаження чатів...</p>
 }
 else if (!chatRooms.Any())
 {
-						<p>Чати не знайдено.</p>
+    <p>Чати не знайдено.</p>
 }
 else
 {
-<div>
-	<div class="search-bar">
-		<img class="input-search-icon" src="Images/Search.svg" alt="Icon" />
-		<input @bind="searchTerm" placeholder="Type username or chat name..." />
-	</div>
-	<div>
-		<ul class="chat-list">
-			@foreach (var chat in chatRooms)
-			{
-			<li class="chat-select-container">
-				<button @onclick="() => OpenChat(chat.Id)">
-					<div class="avatar-container">
-						<img src="/Images/Avatar.png" alt="Avatar" />
-					</div>
-					<div class="chat-preview-container">
-						<div class="top-container">
-							<div class="header-text">
-									@chat.Name
-							</div>
-							<div class="functional-text">
-									@chat.FormattedLastMessageDate
-							</div>
-						</div>
-						<div class="bottom-container">
-							<div class="chat-content functional-text">
-									@chat.LastMessagePreview.Content
-							</div>
-						</div>
-					</div>
-				</button>
-				<!-- <button @onclick="Logout" style="color: green">Logout</button> -->
-			</li>
-			}
-		</ul>
-		<div class="custom-scroll-bar"></div>
-	</div>
+    <div>
+        <div class="search-bar">
+            <img class="input-search-icon" src="Images/Search.svg" alt="Icon" />
+            <input @bind="searchTerm" placeholder="Type username or chat name..." />
+        </div>
+        <div>
+            <ul class="chat-list">
+                @foreach (var chat in chatRooms)
+                {
+                    <li class="chat-select-container">
+                        <button @onclick="() => OpenChat(chat.Id)">
+                            <div class="avatar-container">
+                                <img src="/Images/Avatar.png" alt="Avatar" />
+                            </div>
+                            <div class="chat-preview-container">
+                                <div class="top-container">
+                                    <div class="header-text">
+                                        @chat.Name
+                                    </div>
+                                    <div class="functional-text">
+                                        @chat.FormattedLastMessageDate
+                                    </div>
+                                </div>
+                                <div class="bottom-container">
+                                    <div class="chat-content functional-text">
+                                        @chat.LastMessagePreview.Content
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                        <!--<button @onclick="Logout" style="color: green">Logout</button>-->
+                    </li>
+                }
+            </ul>
+            <div class="custom-scroll-bar"></div>
+            <!--<button class="create-chat-button" @onclick="ShowCreateChatModal">
+                <img src="/Images/plus.svg" alt="Create Chat" />
+            </button>-->
+        </div>
 
-</div>
+    </div>
 }
 
+<!-- Модальне вікно створення чату -->
+<!--@if (isCreateChatModalVisible)
+{
+    <div class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="header-text">Новий чат</h3>
+                <button class="close-button" @onclick="HideCreateChatModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-users-container">
+                    <input @bind="userSearchTerm" @bind:event="oninput" @onkeyup="SearchUsers"
+                    placeholder="Введіть ім'я користувача..." class="user-search-input" />
+
+                    @if (isSearching)
+                    {
+                        <div class="loading-indicator">Пошук...</div>
+                    }
+                    else if (searchedUsers != null && searchedUsers.Any())
+                    {
+                        <ul class="users-list">
+                            @foreach (var user in searchedUsers)
+                            {
+                                <li class="user-item">
+                                    <button class="user-select-button" @onclick="() => CreateChatWithUser(user)">
+                                        <div class="avatar-container small">
+                                            <img src="/Images/Avatar.png" alt="User Avatar" />
+                                        </div>
+                                        <div class="user-info">
+                                            <span class="username">@user.UserName</span>
+                                            <span class="display-name">@user.DisplayName</span>
+                                        </div>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else if (!string.IsNullOrEmpty(userSearchTerm) && searchedUsers != null)
+                    {
+                        <div class="no-results">Користувачів не знайдено</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}-->
+
+<style>
+    .chats-container {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    }
+
+    .create-chat-button {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #5181B8;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+    z-index: 100;
+    }
+
+    .create-chat-button:hover {
+    background-color: #4A76A8;
+    transform: scale(1.05);
+    }
+
+    .create-chat-button img {
+    width: 24px;
+    height: 24px;
+    filter: brightness(0) invert(1);
+    }
+
+    /* Стилі для модального вікна */
+    .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    }
+
+    .modal-container {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    }
+
+    .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #EEEEEE;
+    }
+
+    .close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    }
+
+    .modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    }
+
+    .user-search-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #EEEEEE;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    }
+
+    .users-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    }
+
+    .user-item {
+    margin-bottom: 8px;
+    }
+
+    .user-select-button {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    width: 100%;
+    border: none;
+    background-color: #F5F5F5;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s;
+    }
+
+    .user-select-button:hover {
+    background-color: #EEEEEE;
+    }
+
+    .avatar-container.small {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    margin-right: 12px;
+    }
+
+    .user-info {
+    display: flex;
+    flex-direction: column;
+    }
+
+    .username {
+    font-weight: bold;
+    }
+
+    .display-name {
+    font-size: 12px;
+    color: #777;
+    }
+
+    .loading-indicator, .no-results {
+    padding: 16px;
+    text-align: center;
+    color: #777;
+    }
+</style>
+
 @code {
-	[Parameter] public EventCallback<int> OnChatSelected { get; set; }
-	private IEnumerable<ChatRoomViewModel> chatRooms = new List<ChatRoomViewModel>();
-	private string? searchTerm;
+    [Parameter] public EventCallback<int> OnChatSelected { get; set; }
+    private IEnumerable<ChatRoomViewModel> chatRooms = new List<ChatRoomViewModel>();
+    private string? searchTerm;
+    private string userSearchTerm = "";
+    private bool isCreateChatModalVisible = false;
+    private IEnumerable<UserDto>? searchedUsers;
+    private UserDto? searchedUser;
+    private bool isSearching = false;
+    private bool wasSearchPerformed = false;
 
-	protected override async Task OnInitializedAsync()
-	{
-		await LoadChatsAsync();
-	}
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChatsAsync();
+    }
 
-	private async Task LoadChatsAsync()
-	{
-		try
-		{
-			var chatRoomDtos = await ChatService.GetPrivateChatRoomsAsync();
-			chatRooms = chatRoomDtos.Select(chat => new ChatRoomViewModel
+    private async Task LoadChatsAsync()
+    {
+        try
+        {
+            var chatRoomDtos = await ChatService.GetPrivateChatRoomsAsync();
+            chatRooms = chatRoomDtos.Select(chat => new ChatRoomViewModel
 				{
 					Id = chat.Id,
 					Name = chat.Name,
 					LastMessagePreview = chat.LastMessagePreview
 				}).ToList();
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"Помилка завантаження чатів: {ex.Message}");
-		}
-	}
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Помилка завантаження чатів: {ex.Message}");
+        }
+    }
 
-	private void OpenChat(int chatId)
-	{
-		OnChatSelected.InvokeAsync(chatId);
-	}
+    private void OpenChat(int chatId)
+    {
+        OnChatSelected.InvokeAsync(chatId);
+    }
+
+    private void ShowCreateChatModal()
+    {
+        isCreateChatModalVisible = true;
+        userSearchTerm = "";
+        searchedUser = null;
+        wasSearchPerformed = false;
+        StateHasChanged();
+    }
+
+    private void HideCreateChatModal()
+    {
+        isCreateChatModalVisible = false;
+        StateHasChanged();
+    }
+
+    private async Task SearchUsers()
+    {
+        if (string.IsNullOrWhiteSpace(userSearchTerm))
+        {
+            return;
+        }
+
+        isSearching = true;
+        wasSearchPerformed = true;
+        StateHasChanged();
+
+        try
+        {
+            // Використовуємо метод пошуку користувача за ім'ям
+            searchedUser = await UserService.SearchUserByUsernameAsync(userSearchTerm);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Помилка пошуку користувача: {ex.Message}");
+            searchedUser = null;
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateChatWithUser(UserDto user)
+    {
+        try
+        {
+            // Створюємо новий чат з вибраним користувачем
+            var newChatRoom = await ChatService.CreatePrivateChatRoomAsync(new CreatePrivateChatRoomDto
+                {
+                    UserId = user.Id
+                });
+
+            // Закриваємо модальне вікно
+            HideCreateChatModal();
+
+            // Оновлюємо список чатів
+            await LoadChatsAsync();
+
+            // Відкриваємо новий чат
+            if (newChatRoom != null)
+            {
+                OpenChat(newChatRoom.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Помилка створення чату: {ex.Message}");
+        }
+    }
 
 	private async Task Logout()
 	{

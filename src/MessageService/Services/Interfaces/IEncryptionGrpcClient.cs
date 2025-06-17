@@ -1,6 +1,6 @@
 ﻿namespace MessageService.Services.Interfaces
 {
-    public interface IEncryptionGrpcClient : IDisposable
+    public interface IEncryptionGrpcClient
     {
         Task<string> EncryptAsync(string plainText);
         Task<string> DecryptAsync(string cipherText);

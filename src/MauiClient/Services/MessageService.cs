@@ -7,43 +7,46 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
 using Shared.Contracts;
 using Shared.DTOs.Message;
+using Shared.DTOs.Responses;
 
 namespace MauiClient.Services
 {
     public class MessageService : IMessageService
     {
         private readonly HttpClient _httpClient;
+        private readonly ITokenService _tokenService;
         private HubConnection? _connection;
         private List<MessageDto> _messages = new List<MessageDto>();
         public event Action<MessageDto>? OnNewMessageReceived;
         private string _hubUrl = "https://localhost:7100/messageHub";
         private bool _isConnected = false;
 
-        public MessageService(HttpClient httpClient)
+        public MessageService(HttpClient httpClient, ITokenService tokenService)
         {
             _httpClient = httpClient;
+            _tokenService = tokenService;
         }
 
         public async Task StartConnectionAsync()
         {
+            // Отримуємо JWT токен
+            var token = await _tokenService.GetTokenAsync();
+            if (string.IsNullOrEmpty(token))
+            {
+                throw new InvalidOperationException("Токен аутентифікації відсутній або пустий");
+            }
+
             if (_isConnected)
                 return;
 
             _connection = new HubConnectionBuilder()
-               .WithUrl(_hubUrl, options =>
-               {
-                   options.HttpMessageHandlerFactory = (handler) =>
-                   {
-                       if (handler is HttpClientHandler clientHandler)
-                       {
-                           clientHandler.ServerCertificateCustomValidationCallback +=
-                               (sender, cert, chain, sslPolicyErrors) => true;
-                       }
-                       return handler;
-                   };
-               })
-               .WithAutomaticReconnect()
-               .Build();
+            .WithUrl(_hubUrl, options =>
+            {
+                // Передаємо токен через AccessTokenProvider
+                options.AccessTokenProvider = async () => await Task.FromResult(token);
+            })
+            .WithAutomaticReconnect()
+            .Build();
 
             // Регистрация обработчика сообщений
             _connection.On<MessageDto>("ReceiveMessage", (message) =>
@@ -84,20 +87,30 @@ namespace MauiClient.Services
             await _connection!.InvokeAsync("LeaveGroup", chatRoomId.ToString());
         }
 
-        public async Task<MessageDto?> SendMessageAsync(SendMessageDto model)
+        public async Task<MessageDto?> SendMessageAsync(int chatRoomId, string content)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/message/send", model);
+            var response = await _httpClient.PostAsJsonAsync($"api/message/send/{chatRoomId}", content);
             if(response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<MessageDto>();
+                var message = await response.Content.ReadFromJsonAsync<ApiResponse<MessageDto>>();
+                return message?.Data;
             }
             return null;
         }
 
         public async Task<IEnumerable<MessageDto>> GetMessagesAsync(int chatRoomId, int startIndex, int count)
         {
-            var response = await _httpClient.GetFromJsonAsync<IEnumerable<MessageDto>>($"api/message/chat/{chatRoomId}?startIndex={startIndex}&count={count}");
-            return response ?? new List<MessageDto>();
+            var httpResponse = await _httpClient.GetAsync($"api/message/chat/{chatRoomId}?startIndex={startIndex}&count={count}");
+            httpResponse.EnsureSuccessStatusCode();
+
+            var jsonContent = await httpResponse.Content.ReadAsStringAsync();
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true // Це ключове налаштування!
+            };
+
+            var response = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<List<MessageDto>>>(jsonContent, options);
+            return response?.Data ?? new List<MessageDto>();
         }
 
         public async Task<MessageDto?> MarkMessageAsRead(int messageId)
@@ -105,7 +118,8 @@ namespace MauiClient.Services
             var response = await _httpClient.PostAsync($"api/message/mark-read/{messageId}", null);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<MessageDto>();
+                var message = await response.Content.ReadFromJsonAsync<ApiResponse<MessageDto>>();
+                return message?.Data;
             }
             return null;
         }
@@ -122,10 +136,10 @@ namespace MauiClient.Services
             return response.IsSuccessStatusCode;
         }
 
-        public async Task<ulong> GetMessagesCountByChatRoomIdAsync(int chatRoomId)
+        public async Task<ulong?> GetMessagesCountByChatRoomIdAsync(int chatRoomId)
         {
-            var response = await _httpClient.GetFromJsonAsync<ulong>($"api/message/count/{chatRoomId}");
-            return response;
+            var response = await _httpClient.GetFromJsonAsync<ApiResponse<ulong>>($"api/message/count/{chatRoomId}");
+            return response?.Data;
         }
     }
 }

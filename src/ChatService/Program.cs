@@ -2,6 +2,10 @@ using ChatService.Services;
 using Microsoft.EntityFrameworkCore;
 using ChatService.Configuration;
 using Shared.Interceptors;
+using Shared.Outbox;
+using ChatService.Data;
+using ChatService.BackgroundServices;
+using ChatService.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,37 +38,36 @@ try
     // Реєстрація сервісів авторизації
     builder.Services.AddAuthorizationServices();
 
-    // HTTP клієнти
-    builder.Services.AddHttpClients(builder.Configuration);
-
     // gRPC клієнти
     builder.Services.AddGrpcClients(builder.Configuration);
 
-    // gRPC сервери
-    builder.Services.AddGrpc(options =>
-    {
-        // Налаштування gRPC
-        options.MaxReceiveMessageSize = 16 * 1024 * 1024; // 16MB
-        options.MaxSendMessageSize = 16 * 1024 * 1024;    // 16MB
-        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    })
-    .AddServiceOptions<ChatGrpcService>(options =>
+    builder.Services.AddGrpcInterceptors();
+
+    builder.Services.AddGrpcServers(builder.Environment);
+
+    builder.Services.AddGrpcServiceOptions<ChatGrpcService>(options =>
     {
         options.MaxReceiveMessageSize = 16 * 1024 * 1024;
         options.MaxSendMessageSize = 16 * 1024 * 1024;
     });
 
-    // Додаємо серверний interceptor для gRPC
-    builder.Services.AddScoped<ServerAuthInterceptor>();
+    builder.Services.AddGrpcClientWrappers();
+    // Додаємо HTTP клієнти
+    builder.Services.AddServiceHttpClients(builder.Configuration, builder.Environment);
 
     // MassTransit
     builder.Services.AddMassTransitConfiguration(builder.Configuration);
 
+    builder.Services.AddSignalR();
+
     // ChatOperation сервіси
     builder.Services.AddChatOperationServices();
 
+    // Outbox обробка
+    //builder.Services.AddOutboxProcessing<ChatDbContext, ChatOutboxProcessorService>();
+
     // Фонові сервіси
-    builder.Services.AddBackgroundServices();
+    //builder.Services.AddBackgroundServices();
 
     // Swagger документація
     builder.Services.AddSwaggerDocumentation();
@@ -95,15 +98,17 @@ try
         app.UseDatabaseMigration();
     }
 
+    app.UseRouting();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
     // Мапінг контролерів
     app.MapControllers();
 
+    app.MapHub<ChatHub>("/chatHub");
+
     // gRPC сервіси з interceptor'ом
     app.MapGrpcService<ChatGrpcService>()
-        .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
-    app.MapGrpcService<MessageGrpcService>()
-        .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
-    app.MapGrpcService<IdentityGrpcService>()
         .RequireAuthorization(); // Вимагаємо авторизацію для gRPC
 
     // Health check endpoint

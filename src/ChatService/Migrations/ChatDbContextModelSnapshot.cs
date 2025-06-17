@@ -79,7 +79,7 @@ namespace ChatService.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("ChatOperations");
+                    b.ToTable("ChatOperations", (string)null);
                 });
 
             modelBuilder.Entity("ChatService.Models.ChatRoom", b =>
@@ -104,7 +104,7 @@ namespace ChatService.Migrations
 
                     b.HasIndex("FolderId");
 
-                    b.ToTable("ChatRooms");
+                    b.ToTable("ChatRooms", (string)null);
 
                     b.UseTptMappingStrategy();
                 });
@@ -129,7 +129,7 @@ namespace ChatService.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Folders");
+                    b.ToTable("Folders", (string)null);
                 });
 
             modelBuilder.Entity("ChatService.Models.GroupChatMember", b =>
@@ -145,7 +145,7 @@ namespace ChatService.Migrations
 
                     b.HasKey("GroupChatRoomId", "UserId");
 
-                    b.ToTable("GroupChatMembers");
+                    b.ToTable("GroupChatMembers", (string)null);
                 });
 
             modelBuilder.Entity("ChatService.Models.OutboxMessage", b =>
@@ -186,7 +186,7 @@ namespace ChatService.Migrations
 
                     b.HasIndex("ProcessedAt");
 
-                    b.ToTable("OutboxMessages");
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("ChatService.Models.UserChatRoom", b =>
@@ -199,7 +199,7 @@ namespace ChatService.Migrations
 
                     b.HasKey("PrivateChatRoomId", "UserId");
 
-                    b.ToTable("UserChatRooms");
+                    b.ToTable("UserChatRooms", (string)null);
                 });
 
             modelBuilder.Entity("Shared.Contracts.ProcessedEvent", b =>
@@ -221,7 +221,7 @@ namespace ChatService.Migrations
 
                     b.HasIndex("ProcessedAt");
 
-                    b.ToTable("ProcessedEvents");
+                    b.ToTable("ProcessedEvents", (string)null);
                 });
 
             modelBuilder.Entity("ChatService.Models.GroupChatRoom", b =>

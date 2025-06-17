@@ -50,18 +50,12 @@ namespace MessageService.Sagas.MessageDelivery.Consumers
                     return;
                 }
 
-                // Перетворення команди на DTO для збереження
-                var sendMessageDto = new SendMessageDto
-                {
-                    ChatRoomId = command.ChatRoomId,
-                    Content = command.Content
-                };
-
                 // Збереження повідомлення в базу даних
-                var messageDto = await _messageRepository.CreateMessageForSagaAsync(
-                    sendMessageDto,
+                var messageDto = await _messageRepository.CreateMessageAsync(
+                    command.Content,
                     command.SenderUserId,
-                    command.CorrelationId);
+                    command.CorrelationId,
+                    command.ChatRoomId);
 
                 // Публікація події успішного збереження
                 await context.Publish(new MessageSavedEvent

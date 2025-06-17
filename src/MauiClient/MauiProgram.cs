@@ -50,6 +50,7 @@ namespace MauiClient
             builder.Services.AddScoped<IFolderService, FolderService>();
             builder.Services.AddScoped<ITokenRefresher, TokenRefresher>();
             builder.Services.AddScoped<IMessageService, MessageService>();
+            builder.Services.AddScoped<IUserService, UserService>();
 
             builder.Services.AddAuthorizationCore();
             builder.Services.AddScoped<ClientAuthenticationStateProvider>();

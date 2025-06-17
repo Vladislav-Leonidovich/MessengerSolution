@@ -2,7 +2,7 @@
 
 namespace ChatService.Services.Interfaces
 {
-    public interface IMessageGrpcService
+    public interface IMessageGrpcClient
     {
         /// <summary>
         /// Отримує останнє повідомлення для чату

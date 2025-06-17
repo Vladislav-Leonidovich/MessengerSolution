@@ -65,39 +65,72 @@ namespace MessageService.Migrations
                     b.ToTable("Messages");
                 });
 
-            modelBuilder.Entity("MessageService.Models.OutboxMessage", b =>
+            modelBuilder.Entity("MessageService.Models.MessageOperation", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<Guid>("CorrelationId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("ChatRoomId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("Error")
+                    b.Property<string>("ErrorCode")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("EventData")
-                        .IsRequired()
+                    b.Property<string>("ErrorMessage")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime?>("ProcessedAt")
+                    b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<int>("RetryCount")
+                    b.Property<int?>("MessageId")
                         .HasColumnType("int");
 
-                    b.HasKey("Id");
+                    b.Property<string>("OperationData")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("OperationType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Progress")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusMessage")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CorrelationId");
+
+                    b.HasIndex("ChatRoomId");
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("ProcessedAt");
+                    b.HasIndex("MessageId");
 
-                    b.ToTable("OutboxMessages");
+                    b.HasIndex("Status");
+
+                    b.ToTable("MessageOperations");
                 });
 
             modelBuilder.Entity("Shared.Contracts.ProcessedEvent", b =>
@@ -120,6 +153,47 @@ namespace MessageService.Migrations
                     b.HasIndex("ProcessedAt");
 
                     b.ToTable("ProcessedEvents");
+                });
+
+            modelBuilder.Entity("Shared.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("EventData")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("NextRetryAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ProcessedAt");
+
+                    b.ToTable("OutboxMessages");
                 });
 #pragma warning restore 612, 618
         }

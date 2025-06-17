@@ -45,6 +45,7 @@ namespace MauiClient.Services
             {
                 return new AuthenticationState(anonymous);
             }
+
             // Якщо токен є – формуємо ClaimsPrincipal з нього
             var handler = new JwtSecurityTokenHandler();
             JwtSecurityToken jwt;
@@ -58,28 +59,25 @@ namespace MauiClient.Services
                 await Logout();
                 return new AuthenticationState(anonymous);
             }
-            // Перевіряємо строк придатності токена
-            if (jwt.ValidTo < DateTime.UtcNow)
-            {
-                // Тут можна виконати спробу оновлення токена за допомогою refresh-токена
-                string? refresh = await _tokenService.GetRefreshTokenAsync();
-                if (!string.IsNullOrEmpty(refresh))
-                {
-                    var isRefresh = await _tokenRefresher.RefreshTokenAsync(refresh);
-                    if(isRefresh)
-                    {
-                        token = await _tokenService.GetTokenAsync();
-                        jwt = handler.ReadJwtToken(token);
-                    }
-                    else
-                    {
-                        await Logout();
-                        return new AuthenticationState(anonymous);
-                    }
-                }
-            }
+
+            // Перевірка терміну дії...
+
             // Створюємо ClaimsIdentity з отриманих з JWT тверджень
             var identity = new ClaimsIdentity(jwt.Claims, "Bearer");
+
+            // Явно додаємо стандартний клейм для ID користувача
+            var userIdClaim = jwt.Claims.FirstOrDefault(c =>
+                c.Type == "nameid" ||
+                c.Type == "sub" ||
+                c.Type == "uid" ||
+                c.Type == ClaimTypes.NameIdentifier);
+
+            if (userIdClaim != null)
+            {
+                // Додаємо клейм у стандартному форматі .NET
+                identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userIdClaim.Value));
+            }
+
             var user = new ClaimsPrincipal(identity);
             return new AuthenticationState(user);
         }

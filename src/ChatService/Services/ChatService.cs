@@ -7,6 +7,11 @@ using ChatService.Services.Interfaces;
 using Shared.DTOs.Chat;
 using Shared.DTOs.Responses;
 using ChatService.Sagas.ChatCreation.Events;
+using ChatService.Sagas.ChatOperation.Events;
+using Microsoft.AspNetCore.SignalR;
+using ChatService.Hubs;
+using Shared.DTOs.Message;
+using System;
 
 namespace ChatService.Services
 {
@@ -15,6 +20,7 @@ namespace ChatService.Services
         private readonly IChatRoomRepository _chatRoomRepository;
         private readonly IChatAuthorizationService _authService;
         private readonly IChatOperationService _chatOperationService;
+        private readonly IHubContext<ChatHub> _hubContext;
         private readonly IBus _bus;
         private readonly ILogger<ChatService> _logger;
 
@@ -22,6 +28,7 @@ namespace ChatService.Services
             IChatRoomRepository chatRoomRepository,
             IChatAuthorizationService authService,
             IChatOperationService chatOperationService,
+            IHubContext<ChatHub> _hubContext,
             IBus bus,
             ILogger<ChatService> logger)
         {
@@ -42,16 +49,17 @@ namespace ChatService.Services
                 await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 // Отримання базової інформації про чат
-                var chatRoom = await _chatRoomRepository.GetChatRoomTypeByIdAsync(chatRoomId);
+                var chatRoomType = await _chatRoomRepository.GetChatRoomTypeByIdAsync(chatRoomId);
 
                 // Залежно від типу повертаємо відповідне DTO
-                if (chatRoom == ChatRoomType.privateChat)
+                if (chatRoomType == ChatRoomType.privateChat)
                 {
                     var privateChat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
                     if (privateChat == null)
                     {
                         throw new EntityNotFoundException("PrivateChat", chatRoomId);
                     }
+
                     return ApiResponse<object>.Ok(privateChat);
                 }
                 else
@@ -61,6 +69,9 @@ namespace ChatService.Services
                     {
                         throw new EntityNotFoundException("GroupChat", chatRoomId);
                     }
+
+                    var lastMessagePreview = await _chatRoomRepository.GetLastMessagePreviewAsync(chatRoomId);
+                    groupChat.LastMessagePreview = lastMessagePreview;
                     return ApiResponse<object>.Ok(groupChat);
                 }
             }
@@ -89,7 +100,7 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+                    //await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
 
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
@@ -118,6 +129,10 @@ namespace ChatService.Services
                 await _authService.EnsureCanAccessChatRoomAsync(userId, chatRoomId);
 
                 var chat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
+                if(chat == null)
+                {
+                    throw new EntityNotFoundException("PrivateChatRoom", chatRoomId);
+                }
 
                 return ApiResponse<ChatRoomDto>.Ok(chat);
             }
@@ -138,6 +153,17 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetPrivateChatsForUserAsync(userId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                    chat.Name = await _chatRoomRepository.GetChatNameAsync(chat.Id, userId);
+                }
                 return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)
@@ -157,6 +183,18 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetPrivateChatsForFolderAsync(folderId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                    chat.Name = await _chatRoomRepository.GetChatNameAsync(chat.Id, userId);
+                }
+
                 return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)
@@ -176,6 +214,17 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetPrivateChatsWithoutFolderAsync(userId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                    chat.Name = await _chatRoomRepository.GetChatNameAsync(chat.Id, userId);
+                }
                 return ApiResponse<IEnumerable<ChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)
@@ -196,38 +245,11 @@ namespace ChatService.Services
         {
             try
             {
-                var correlationId = Guid.NewGuid();
+                var chat = await _chatRoomRepository.CreatePrivateChatAsync(dto, userId);
+                string groupName = chat.Id.ToString();
+                //await _hubContext.Clients.Group(groupName).SendAsync("ChatCreated");
 
-                _logger.LogInformation("Створення приватного чату для користувача {UserId} з кореляційним ID {CorrelationId}", userId, correlationId);
-
-                await _bus.Publish(new ChatCreationStartedEvent
-                {
-                    CorrelationId = correlationId,
-                    ChatRoomId = 0, // Буде згенеровано в сазі
-                    CreatorUserId = userId,
-
-                });
-
-                var operation = await _chatOperationService.WaitForOperationCompletionAsync(correlationId);
-
-                if (operation.IsSuccessful)
-                {
-                    // Отримуємо створений чат за ID з результату операції
-                    int chatRoomId = _chatOperationService.ExtractChatRoomIdFromResult(operation.Result);
-                    var chat = await _chatRoomRepository.GetPrivateChatByIdAsync(chatRoomId);
-
-                    if (chat == null)
-                    {
-                        return ApiResponse<ChatRoomDto>.Fail("Чат створено, але не вдалося отримати його дані");
-                    }
-
-                    return ApiResponse<ChatRoomDto>.Ok(chat, "Груповий чат успішно створено");
-                }
-                else
-                {
-                    // Якщо операція не вдалася, повертаємо помилку
-                    return ApiResponse<ChatRoomDto>.Fail(operation.ErrorMessage ?? "Помилка при створенні чату");
-                }
+                return ApiResponse<ChatRoomDto>.Ok(chat, "Приватний чат успішно створено");
             }
             catch (EntityNotFoundException ex)
             {
@@ -256,7 +278,8 @@ namespace ChatService.Services
                 if (result)
                 {
                     // Публікація події видалення чату
-                    await _bus.Publish(new ChatDeletedEvent { ChatRoomId = chatRoomId });
+                    string groupName = chatRoomId.ToString();
+                    //await _hubContext.Clients.Group(groupName).SendAsync("ChatDeleted");
 
                     return ApiResponse<bool>.Ok(true, "Чат видалено успішно");
                 }
@@ -307,6 +330,16 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetGroupChatsForUserAsync(userId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                }
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)
@@ -326,6 +359,16 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetGroupChatsForFolderAsync(folderId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                }
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)
@@ -345,6 +388,16 @@ namespace ChatService.Services
             try
             {
                 var chats = await _chatRoomRepository.GetGroupChatsWithoutFolderAsync(userId);
+                var chatIds = chats.Select(chat => chat.Id).ToList();
+                var dictionary = await _chatRoomRepository.GetLastMessagePreviewBatchAsync(chatIds);
+
+                foreach (var chat in chats)
+                {
+                    if (dictionary.TryGetValue(chat.Id, out var lastMessage))
+                    {
+                        chat.LastMessagePreview = lastMessage;
+                    }
+                }
                 return ApiResponse<IEnumerable<GroupChatRoomDto>>.Ok(chats);
             }
             catch (EntityNotFoundException ex)

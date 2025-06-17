@@ -1,4 +1,5 @@
 ﻿using EncryptionService.Helpers;
+using EncryptionService.Services.Interfaces;
 
 namespace EncryptionService.Services
 {

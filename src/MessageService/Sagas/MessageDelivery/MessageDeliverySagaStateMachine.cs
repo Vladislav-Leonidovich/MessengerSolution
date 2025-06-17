@@ -59,11 +59,7 @@ namespace MessageService.Sagas.MessageDelivery
                         UserId = context.Message.SenderUserId,
                         MessageId = context.Message.MessageId,
                         ChatRoomId = context.Message.ChatRoomId,
-                        OperationData = new SendMessageDto
-                        {
-                            ChatRoomId = context.Message.ChatRoomId,
-                            Content = context.Message.Content
-                        }
+                        OperationData = context.Message.Content
                     }))
                     .SendAsync(context => context.Init<SaveMessageCommand>(new
                     {
